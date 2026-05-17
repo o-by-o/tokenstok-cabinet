@@ -1,0 +1,29 @@
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: #faf9f6;
+  color: #0c0c0c;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100dvh;
+  font-family: var(--font-manrope), -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
+
+button { font-family: inherit; }
+
+a { color: inherit; }
+
+/* hide scrollbars inside the app (chat list etc.) */
+.no-scroll-bars { scrollbar-width: none; }
+.no-scroll-bars::-webkit-scrollbar { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
