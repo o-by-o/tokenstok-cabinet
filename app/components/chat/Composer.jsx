@@ -4,9 +4,9 @@
 // foundation so styling matches the mockup. Wraps a real <textarea> with the
 // .input class so we get the right typography and a working autosize input.
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { TSIcon } from "../../cabinet/foundation";
-import { useApp, useDispatch } from "../../lib/store";
+import { useApp, useDispatch, useUi } from "../../lib/store";
 import { useAutosizeTextarea } from "../../lib/hooks";
 
 const STYLE = `
@@ -30,9 +30,25 @@ const STYLE = `
 export function Composer({ onVoice, autoFocus = false }) {
   const dispatch = useDispatch();
   const { state } = useApp();
+  const ui = useUi();
   const [text, setText] = useState("");
   const ref = useRef(null);
   useAutosizeTextarea(ref, text);
+
+  // pick up text prefilled by /library "apply" or /agents agent-card tap
+  useEffect(() => {
+    if (ui.composerPrefill) {
+      setText(ui.composerPrefill);
+      dispatch({ type: "ui/clearPrefill" });
+      setTimeout(() => ref.current?.focus(), 0);
+    }
+  }, [ui.composerPrefill, dispatch]);
+
+  // expose ref globally so shortcut handlers can focus composer
+  useEffect(() => {
+    if (typeof window !== "undefined") window.__tk_composer = ref.current;
+    return () => { if (typeof window !== "undefined") window.__tk_composer = null; };
+  });
 
   const canSend = text.trim().length > 0;
 

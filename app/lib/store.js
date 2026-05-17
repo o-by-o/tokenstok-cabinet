@@ -132,6 +132,14 @@ function reducer(state, action) {
         chats: { ...state.chats, byId: { ...state.chats.byId, [action.id]: { ...c, pinned: !c.pinned } } },
       };
     }
+    case "chat/rename": {
+      const c = state.chats.byId[action.id];
+      if (!c || !action.title) return state;
+      return {
+        ...state,
+        chats: { ...state.chats, byId: { ...state.chats.byId, [action.id]: { ...c, title: action.title } } },
+      };
+    }
     case "chat/setModel": {
       const c = state.chats.byId[state.chats.currentId];
       if (!c) return state;
@@ -217,10 +225,13 @@ function reducer(state, action) {
     }
 
     // ui ───────────────────────────────────────────────
-    case "ui/setSidebar": return { ...state, ui: { ...state.ui, sidebarOpen: action.open } };
-    case "ui/openSheet":  return { ...state, ui: { ...state.ui, sheet: action.sheet || null } };
-    case "ui/longPress":  return { ...state, ui: { ...state.ui, longPress: action.value } };
-    case "ui/set":        return { ...state, ui: { ...state.ui, ...action.patch } };
+    case "ui/setSidebar":  return { ...state, ui: { ...state.ui, sidebarOpen: action.open } };
+    case "ui/openSheet":   return { ...state, ui: { ...state.ui, sheet: action.sheet || null } };
+    case "ui/longPress":   return { ...state, ui: { ...state.ui, longPress: action.value } };
+    case "ui/set":         return { ...state, ui: { ...state.ui, ...action.patch } };
+    // composer prefill — Library / Agents put text here, Composer consumes on mount.
+    case "ui/prefill":     return { ...state, ui: { ...state.ui, composerPrefill: action.text || "" } };
+    case "ui/clearPrefill":return { ...state, ui: { ...state.ui, composerPrefill: "" } };
 
     // hydration / reset
     case "hydrate":       return action.payload;

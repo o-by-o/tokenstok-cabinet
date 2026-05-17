@@ -5,9 +5,11 @@
 // client render identical DOM — no hydration mismatch. JS state only controls
 // the mobile drawer open/close.
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { TS_ACCENTS } from "../../cabinet/foundation";
 import { useUi, useDispatch } from "../../lib/store";
+import { useShortcuts } from "../../lib/hooks";
 import { Sidebar } from "./Sidebar";
 import { RightRail } from "./RightRail";
 import { MobileDrawer } from "./MobileDrawer";
@@ -102,6 +104,7 @@ const STYLE = `
 export function AppShell({ children }) {
   const ui = useUi();
   const dispatch = useDispatch();
+  const router = useRouter();
 
   // Lock body scroll when drawer / sheet is open (relevant on mobile only)
   useEffect(() => {
@@ -111,6 +114,19 @@ export function AppShell({ children }) {
       return () => { document.body.style.overflow = prev; };
     }
   }, [ui.sidebarOpen, ui.sheet]);
+
+  // global keyboard shortcuts
+  const shortcuts = useMemo(() => ({
+    "Mod+k": () => { router.push("/chat"); setTimeout(() => dispatch({ type: "ui/openSheet", sheet: "picker" }), 0); },
+    "Mod+/": () => { router.push("/chat"); setTimeout(() => window.__tk_composer?.focus(), 50); },
+    "Mod+n": () => { dispatch({ type: "chat/new" }); router.push("/chat"); setTimeout(() => window.__tk_composer?.focus(), 50); },
+    "Esc":   () => {
+      if (ui.sheet)       dispatch({ type: "ui/openSheet",  sheet: null });
+      if (ui.sidebarOpen) dispatch({ type: "ui/setSidebar", open: false });
+    },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [router, dispatch, ui.sheet, ui.sidebarOpen]);
+  useShortcuts(shortcuts);
 
   const accent = (TS_ACCENTS[ui.accent] || TS_ACCENTS.graphite);
   const accentVal = ui.theme === "dark" ? accent.dark : accent.light;

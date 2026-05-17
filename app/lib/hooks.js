@@ -96,3 +96,26 @@ export function useEscape(handler, enabled = true) {
     return () => document.removeEventListener("keydown", k);
   }, [handler, enabled]);
 }
+
+// useShortcuts — registers a map of "Mod+Key" → handler. "Mod" matches Cmd
+// on macOS, Ctrl elsewhere. Skips when user is typing in an input/textarea
+// (except Escape which always fires).
+export function useShortcuts(map) {
+  useEffect(() => {
+    const onKey = (e) => {
+      const isTyping = e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable);
+      const mod = e.metaKey || e.ctrlKey;
+      const key = e.key;
+      // canonicalize: "Mod+K" / "Esc" / "Mod+/"
+      const probe = mod ? `Mod+${key.toLowerCase()}` : key === "Escape" ? "Esc" : null;
+      if (!probe) return;
+      const handler = map[probe];
+      if (!handler) return;
+      if (isTyping && probe !== "Esc" && probe !== "Mod+/") return;
+      e.preventDefault();
+      handler(e);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [map]);
+}

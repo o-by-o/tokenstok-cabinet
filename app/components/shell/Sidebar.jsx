@@ -3,7 +3,7 @@
 // Sidebar.jsx — chat history + search + profile snippet + topup button.
 // Used both for desktop persistent sidebar and inside MobileDrawer.
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { TSIcon } from "../../cabinet/foundation";
@@ -68,6 +68,32 @@ const STYLE = `
   .sb-chat .ttl svg{ flex-shrink:0; }
   .sb-chat .pre{ font-family:var(--mono); font-size:11px; color:var(--mute); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .sb-chat .when{ font-family:var(--mono); font-size:10.5px; color:var(--mute); flex-shrink:0; }
+  /* hover kebab + popover */
+  .sb-chat{ position:relative; }
+  .sb-kebab{
+    width:24px; height:24px; border-radius:6px;
+    border:0; background:transparent; color:var(--mute); cursor:pointer;
+    display:none; align-items:center; justify-content:center;
+    flex-shrink:0; padding:0;
+  }
+  .sb-chat:hover .sb-kebab{ display:flex; }
+  .sb-chat .sb-kebab.open{ display:flex; color:var(--ink); background:var(--card); }
+  .sb-kebab:hover{ background:var(--card); color:var(--ink); }
+  .sb-pop{
+    position:absolute; right:8px; top:calc(100% - 6px);
+    background:var(--card); border:1px solid var(--line); border-radius:10px;
+    box-shadow:0 18px 50px -16px rgba(0,0,0,.35);
+    padding:4px; min-width:180px; z-index:20;
+  }
+  .sb-pop button{
+    display:flex; align-items:center; gap:10px;
+    width:100%; padding:8px 10px; border:0; background:transparent;
+    border-radius:6px; cursor:pointer; font:500 13px var(--sans); color:var(--ink);
+    text-align:left;
+  }
+  .sb-pop button:hover{ background:var(--chip); }
+  .sb-pop button.danger{ color:#c25a35; }
+  .sb-pop hr{ border:0; border-top:1px solid var(--line); margin:4px 2px; }
   .sb-foot{
     margin:8px; padding:10px 12px;
     background:var(--card); border:1px solid var(--line); border-radius:14px;
@@ -199,12 +225,36 @@ function ChatRow({ chat, active, onClick }){
   const model = TS_MODELS.find((m) => m.id === chat.modelId);
   const last = chat.messages.at(-1);
   const preview = last ? (last.role === "user" ? "ты: " : "") + last.text : "пустой чат";
-  // Render the time only after mount to avoid SSR/client divergence.
-  // Server: empty, client: actual relative time.
   const [mounted, setMounted] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const popRef = useRef(null);
+  const dispatch = useDispatch();
   useEffect(() => { setMounted(true); }, []);
+  // close popover on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    const off = (e) => { if (popRef.current && !popRef.current.contains(e.target)) setMenuOpen(false); };
+    document.addEventListener("pointerdown", off, true);
+    return () => document.removeEventListener("pointerdown", off, true);
+  }, [menuOpen]);
+
+  const rename = () => {
+    setMenuOpen(false);
+    const next = window.prompt("Переименовать чат:", chat.title || "");
+    if (next && next.trim()) dispatch({ type: "chat/rename", id: chat.id, title: next.trim() });
+  };
+  const togglePin = () => { setMenuOpen(false); dispatch({ type: "chat/togglePin", id: chat.id }); };
+  const remove = () => {
+    setMenuOpen(false);
+    if (window.confirm(`Удалить «${chat.title || "Новый чат"}»?`)) dispatch({ type: "chat/delete", id: chat.id });
+  };
+
   return (
-    <div className={`sb-chat ${active ? "active" : ""}`} onClick={onClick}>
+    <div className={`sb-chat ${active ? "active" : ""}`} onClick={(e) => {
+      // ignore clicks on kebab / popover
+      if (e.target.closest(".sb-kebab,.sb-pop")) return;
+      onClick();
+    }}>
       <span className="gly">{model?.glyph || "··"}</span>
       <div className="meta">
         <div className="ttl">
@@ -214,6 +264,21 @@ function ChatRow({ chat, active, onClick }){
         <div className="pre">{preview}</div>
       </div>
       <div className="when" suppressHydrationWarning>{mounted ? relTime(chat.updatedAt) : ""}</div>
+      <button
+        className={`sb-kebab ${menuOpen ? "open" : ""}`}
+        aria-label="действия с чатом"
+        onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o); }}
+      >
+        {TSIcon.more({ width: 14, height: 14 })}
+      </button>
+      {menuOpen && (
+        <div className="sb-pop" ref={popRef} onClick={(e) => e.stopPropagation()}>
+          <button onClick={rename}>{TSIcon.edit({})} Переименовать</button>
+          <button onClick={togglePin}>{TSIcon.pin({})} {chat.pinned ? "Открепить" : "Закрепить"}</button>
+          <hr/>
+          <button className="danger" onClick={remove}>{TSIcon.close({})} Удалить</button>
+        </div>
+      )}
     </div>
   );
 }

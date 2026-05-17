@@ -3,8 +3,10 @@
 // LibraryView.jsx — ported from screens-features.jsx ScreenLibrary.
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { TSIcon } from "../../cabinet/foundation";
 import { TS_PROMPTS_LIB } from "../../cabinet/data";
+import { useDispatch } from "../../lib/store";
 
 const STYLE = `
   .lv{ flex:1; min-height:0; display:flex; flex-direction:column; background:var(--bg); height:100dvh; }
@@ -74,6 +76,12 @@ const STYLE = `
 const TAGS = ["Все · 28", "Текст · 14", "Картинка · 6", "Код · 5", "Жизнь · 3"];
 
 export function LibraryView() {
+  const router = useRouter();
+  const dispatch = useDispatch();
+  const apply = (p) => {
+    dispatch({ type: "ui/prefill", text: p.preview.replace(/…$/, "") });
+    router.push("/chat");
+  };
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: STYLE }} />
@@ -115,7 +123,7 @@ export function LibraryView() {
               <div className="lv-preview">{p.preview}</div>
               <div className="lv-foot">
                 <span className="uses">{p.uses} применений</span>
-                <button>применить {TSIcon.chev({ style: { transform: "rotate(-90deg)" } })}</button>
+                <button onClick={() => apply(p)}>применить {TSIcon.chev({ style: { transform: "rotate(-90deg)" } })}</button>
               </div>
             </div>
           ))}

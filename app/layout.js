@@ -20,6 +20,13 @@ const jetbrains = JetBrains_Mono({
 export const metadata = {
   title: "ТокенСток — кабинет",
   description: "Маркетплейс нейросетей. 218 моделей под одним ключом. Платишь только за факт использования.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "ТокенСток",
+  },
+  formatDetection: { telephone: false },
 };
 
 export const viewport = {
@@ -28,6 +35,7 @@ export const viewport = {
   maximumScale: 1,
   userScalable: false,
   themeColor: "#faf9f6",
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }) {

@@ -72,10 +72,12 @@ export function AgentsView() {
   const router = useRouter();
 
   const startChat = (agent) => {
+    // create empty chat, set the agent's preferred model, prefill composer
+    // with a greeting tuned for the role — user can edit before sending.
     dispatch({ type: "chat/new" });
     setTimeout(() => {
       dispatch({ type: "chat/setModel", modelId: agent.model });
-      dispatch({ type: "msg/sendUser", text: `Привет, ${agent.name.toLowerCase()}! ${agent.desc}` });
+      dispatch({ type: "ui/prefill", text: `Привет, ${agent.name.toLowerCase()}! Помоги мне: ` });
       router.push("/chat");
     }, 0);
   };
