@@ -19,35 +19,42 @@ import { uid, timeOfDay } from "./utils";
 // indirectly) can read the catalog
 const TS_MODELS_FOR_COST = TS_MODELS;
 
+// Marker we use to detect when relTime should show a "real" time after mount.
+// During SSR / first render we keep timestamps relative to the deterministic
+// SEED_NOW so the rendered text matches across server and client.
+let CLIENT_BOOT_TS = null;
+
 const KEY = "tokenstok:v1";
 
 // ── seed ──────────────────────────────────────────────────────────
-// Build initial chats from TS_HISTORY. The current chat is empty (so /chat
-// opens to the greeting), the rest are seeded with a single Q/A from preview.
+// Build initial chats from TS_HISTORY. Deterministic — no Date.now(), no
+// Math.random() — so SSR and client render identical DOM (otherwise hydration
+// mismatches on chat IDs and relative timestamps). Real "now" gets stamped
+// in after mount via "ui/touchSeed".
+const SEED_NOW = 1779000000000; // 2026-05-12, a stable past timestamp
 function seedChats() {
   const byId = {};
   const order = [];
-  const now = Date.now();
   TS_HISTORY.forEach((h, i) => {
     const id = h.id;
     order.push(id);
+    const ts = SEED_NOW - (i + 1) * 3600_000;
     byId[id] = {
       id,
       title: h.title,
       modelId: h.model,
       pinned: !!h.pinned,
-      createdAt: now - (i + 1) * 3600_000,
-      updatedAt: now - (i + 1) * 3600_000,
-      // a preview-only chat: one user msg + one assistant msg
+      createdAt: ts,
+      updatedAt: ts,
       messages: [
-        { id: uid("m"), role: "user",      text: h.preview.replace(/…$/, ""), modelId: h.model, cost: 0.0008 + i * 0.0003, tokens: 10 + i * 2, ts: now - (i + 1) * 3600_000 - 4000 },
-        { id: uid("m"), role: "assistant", text: previewAnswer(h.title), modelId: h.model, cost: 0.0042 + i * 0.001, tokens: 30 + i * 8, latency: 220 + i * 30, ts: now - (i + 1) * 3600_000 },
+        { id: `${id}-u`, role: "user",      text: h.preview.replace(/…$/, ""), modelId: h.model, cost: 0.0008 + i * 0.0003, tokens: 10 + i * 2, ts: ts - 4000 },
+        { id: `${id}-a`, role: "assistant", text: previewAnswer(h.title),       modelId: h.model, cost: 0.0042 + i * 0.001, tokens: 30 + i * 8, latency: 220 + i * 30, ts: ts },
       ],
     };
   });
-  // brand-new empty chat at the top
-  const blankId = uid("c");
-  byId[blankId] = { id: blankId, title: "Новый чат", modelId: "claude-sonnet-4.5", pinned: false, createdAt: now, updatedAt: now, messages: [] };
+  // brand-new empty chat at the top — deterministic id
+  const blankId = "c-empty";
+  byId[blankId] = { id: blankId, title: "Новый чат", modelId: "claude-sonnet-4.5", pinned: false, createdAt: SEED_NOW, updatedAt: SEED_NOW, messages: [] };
   order.unshift(blankId);
   return { byId, order, currentId: blankId };
 }
@@ -246,10 +253,29 @@ export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, undefined, initial);
   const hydrated = useRef(false);
 
-  // hydrate from localStorage after mount (avoid SSR mismatch)
+  // hydrate from localStorage after mount (avoid SSR mismatch).
+  // Merge the persisted blob over the initial state so a partial / older
+  // schema can't leave any slice undefined (we ran into a crash where
+  // localStorage held only {ui:{...}} → state.chats was undefined).
   useEffect(() => {
     const p = loadPersisted();
-    if (p) dispatch({ type: "hydrate", payload: { ...p, ui: { ...initial().ui, theme: p.ui?.theme || "light", accent: p.ui?.accent || "graphite", density: p.ui?.density || "regular", streamKind: p.ui?.streamKind || "token", showCost: p.ui?.showCost !== false } } });
+    if (p) {
+      const base = initial();
+      const merged = {
+        ...base,
+        ...p,
+        chats:  p.chats  ? { ...base.chats,  ...p.chats  } : base.chats,
+        models: p.models ? { ...base.models, ...p.models } : base.models,
+        wallet: p.wallet ? { ...base.wallet, ...p.wallet } : base.wallet,
+        ui: {
+          ...base.ui,
+          ...(p.ui || {}),
+          // ephemeral keys always start fresh regardless of what was saved
+          sidebarOpen: false, sheet: null, longPress: null,
+        },
+      };
+      dispatch({ type: "hydrate", payload: merged });
+    }
     hydrated.current = true;
   }, []);
   // persist on change (debounced)
@@ -277,7 +303,9 @@ export function useCurrentChat() {
 }
 export function useChatList() {
   const { state } = useApp();
-  return state.chats.order.map((id) => state.chats.byId[id]).filter(Boolean);
+  const order = state.chats?.order || [];
+  const byId  = state.chats?.byId  || {};
+  return order.map((id) => byId[id]).filter(Boolean);
 }
 export function useCurrentModelId() {
   const c = useCurrentChat();

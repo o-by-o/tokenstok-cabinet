@@ -20,10 +20,11 @@ export function fmtRubFine(n) {
   return n.toLocaleString("ru-RU", { minimumFractionDigits: 4, maximumFractionDigits: 4 }) + " ₽";
 }
 
-// Relative time in russian: "сейчас", "5 мин", "2 ч", "вчера", "2 дн"
-export function relTime(tsMs) {
+// Relative time in russian: "сейчас", "5 мин", "2 ч", "вчера", "2 дн".
+// `now` defaults to Date.now(); pass a stable value during SSR.
+export function relTime(tsMs, now = Date.now()) {
   if (!tsMs) return "";
-  const diff = Date.now() - tsMs;
+  const diff = now - tsMs;
   const s = Math.floor(diff / 1000);
   if (s < 60) return "сейчас";
   const m = Math.floor(s / 60);

@@ -3,7 +3,7 @@
 // Sidebar.jsx — chat history + search + profile snippet + topup button.
 // Used both for desktop persistent sidebar and inside MobileDrawer.
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { TSIcon } from "../../cabinet/foundation";
@@ -199,6 +199,10 @@ function ChatRow({ chat, active, onClick }){
   const model = TS_MODELS.find((m) => m.id === chat.modelId);
   const last = chat.messages.at(-1);
   const preview = last ? (last.role === "user" ? "ты: " : "") + last.text : "пустой чат";
+  // Render the time only after mount to avoid SSR/client divergence.
+  // Server: empty, client: actual relative time.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
   return (
     <div className={`sb-chat ${active ? "active" : ""}`} onClick={onClick}>
       <span className="gly">{model?.glyph || "··"}</span>
@@ -209,7 +213,7 @@ function ChatRow({ chat, active, onClick }){
         </div>
         <div className="pre">{preview}</div>
       </div>
-      <div className="when">{relTime(chat.updatedAt)}</div>
+      <div className="when" suppressHydrationWarning>{mounted ? relTime(chat.updatedAt) : ""}</div>
     </div>
   );
 }
