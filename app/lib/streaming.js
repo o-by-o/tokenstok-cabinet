@@ -27,11 +27,29 @@ function pickAnswer(prompt) {
   return { a, cost: 0.0042 + Math.random() * 0.015, tokens: 30 + Math.floor(Math.random() * 80), latency: 200 + Math.floor(Math.random() * 250) };
 }
 
+// Detect media generation intent from the user's prompt
+export function detectIntent(prompt) {
+  const p = prompt.toLowerCase();
+  if (/(\b)?(видео|video|sora|veo|5\s*сек(унд)?)/.test(p)) return "video";
+  if (/(нарисуй|draw|generate (an? )?image|обложк|иконк|сгенери(руй|ровать)|midjourney|dalle|flux)/.test(p)) return "image";
+  return "text";
+}
+
 // Synchronously produce the canned assistant message. The hook handles timing.
 export function mockComplete({ prompt, modelId }) {
+  const intent = detectIntent(prompt);
+  if (intent === "image") {
+    const m = TS_MODELS.find((x) => x.id === "dalle-4") || TS_MODELS[7];
+    return { kind: "image", modelId: m.id, modelGlyph: m.glyph, modelName: m.name, cost: 3.4084, tokens: 18, latency: 220, prompt };
+  }
+  if (intent === "video") {
+    const m = TS_MODELS.find((x) => x.id === "sora-2") || TS_MODELS[10];
+    return { kind: "video", modelId: m.id, modelGlyph: m.glyph, modelName: m.name, cost: 27.00, tokens: 14, latency: 320, prompt };
+  }
   const ans = pickAnswer(prompt);
   const model = TS_MODELS.find((m) => m.id === modelId) || TS_MODELS[1]; // sonnet 4.5 default
   return {
+    kind: "text",
     text: ans.a,
     modelId: model.id,
     modelGlyph: model.glyph,

@@ -9,6 +9,7 @@ import { MessageList } from "./MessageList";
 import { EmptyChat } from "./EmptyChat";
 import { Composer } from "./Composer";
 import { ModelPickerSheet } from "../sheets/ModelPickerSheet";
+import { VoiceInputSheet } from "../sheets/VoiceInputSheet";
 import { LongPressMenu } from "../sheets/LongPressMenu";
 import { useCurrentChat, useUi, useDispatch } from "../../lib/store";
 
@@ -36,11 +37,14 @@ export function ChatView() {
           ? <div style={{ flex:1, overflowY:"auto" }} className="no-scroll-bars"><EmptyChat/></div>
           : <MessageList messages={chat.messages} onLongPress={setLongPress}/>
         }
-        <Composer/>
+        <Composer onVoice={() => dispatch({ type: "ui/openSheet", sheet: "voice" })}/>
       </div>
 
       {ui.sheet === "picker" && (
         <ModelPickerSheet onClose={() => dispatch({ type: "ui/openSheet", sheet: null })} />
+      )}
+      {ui.sheet === "voice" && (
+        <VoiceInputSheet onClose={() => dispatch({ type: "ui/openSheet", sheet: null })} />
       )}
 
       {longPress && (

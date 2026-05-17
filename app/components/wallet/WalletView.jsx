@@ -7,7 +7,6 @@ import Link from "next/link";
 import { useBreakpoint } from "../../lib/hooks";
 import { useApp, useDispatch } from "../../lib/store";
 import { TSIcon } from "../../cabinet/foundation";
-import { TS_MODELS } from "../../cabinet/data";
 import { fmtRub } from "../../lib/utils";
 
 const STYLE = `
@@ -82,11 +81,8 @@ export function WalletView() {
 
   const topup = (amount) => dispatch({ type: "wallet/topup", amount });
 
-  const breakdown = Object.entries(state.wallet.byModel).map(([id, c]) => ({
-    id,
-    glyph: TS_MODELS.find((m) => m.id === id)?.glyph || (id.slice(0, 2).toUpperCase()),
-    c,
-  }));
+  // wallet.byModel is now an array of {id, glyph, n, c}
+  const breakdown = state.wallet.byModel || [];
 
   return (
     <>
@@ -145,8 +141,8 @@ export function WalletView() {
                 {breakdown.map((b) => (
                   <div key={b.id} className="br-row">
                     <span className="gly">{b.glyph}</span>
-                    <span className="nm">{b.id}</span>
-                    <span className="n">{Math.floor(b.c * 10)} зап.</span>
+                    <span className="nm" style={{ fontFamily: "var(--mono)", fontWeight: 600 }}>{b.id}</span>
+                    <span className="n">{b.n} зап.</span>
                     <span className="c"><span className="num">{b.c.toFixed(2).replace(".", ",")}</span> ₽</span>
                   </div>
                 ))}

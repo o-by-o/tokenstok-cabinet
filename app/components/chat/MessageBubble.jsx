@@ -12,6 +12,8 @@ import { useUi, useDispatch } from "../../lib/store";
 import { useStreamingMessage } from "../../lib/streaming";
 import { useLongPress } from "../../lib/hooks";
 import { LimitCard } from "./LimitCard";
+import { ImageGenCard } from "./ImageGenCard";
+import { VideoGenCard } from "./VideoGenCard";
 
 // ── per-token DOM renderers (one-shot streaming variants from the design)
 function renderTokenSpan(text, prev) {
@@ -110,6 +112,23 @@ export function MessageBubble({ message, streamKind = "token", showCost = true, 
   // limit card replaces the normal assistant bubble when wallet was empty
   if (message.type === "limit") {
     return <LimitCard message={message} />;
+  }
+  // media generation cards (inline, auto-progress)
+  if (message.type === "image-gen") {
+    return (
+      <>
+        <ImageGenCard prompt={message.prompt || "1024² · промпт"} model={message.modelId} glyph={message.modelGlyph}/>
+        {showCost && <CostMeta message={message} right={false} />}
+      </>
+    );
+  }
+  if (message.type === "video-gen") {
+    return (
+      <>
+        <VideoGenCard/>
+        {showCost && <CostMeta message={message} right={false} />}
+      </>
+    );
   }
 
   // assistant

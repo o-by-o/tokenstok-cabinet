@@ -65,7 +65,17 @@ function previewAnswer(title) {
 const initial = () => ({
   chats: seedChats(),
   models: { currentId: "claude-sonnet-4.5", recentIds: TS_RECENT_MODELS },
-  wallet: { balance: 847.12, todaySpend: 23.40, byModel: { "claude-sonnet-4.5": 14.82, "dalle-4": 6.80, "claude-haiku-4.5": 1.12, "whisper-1": 0.66 } },
+  wallet: {
+    balance: 847.12,
+    todaySpend: 23.40,
+    // mirrors screens-util.jsx ScreenProfile breakdown exactly
+    byModel: [
+      { id: "claude-sonnet-4.5", glyph: "CL", n: 142, c: 14.82 },
+      { id: "dalle-4",           glyph: "D4", n: 2,   c: 6.80 },
+      { id: "claude-haiku-4.5",  glyph: "CH", n: 67,  c: 1.12 },
+      { id: "whisper-1",         glyph: "WS", n: 1,   c: 0.66 },
+    ],
+  },
   ui: {
     sidebarOpen: false,
     sheet: null,
@@ -150,7 +160,9 @@ function reducer(state, action) {
       const asstMsg = {
         id: uid("m"),
         role: "assistant",
+        type: completion.kind === "image" ? "image-gen" : completion.kind === "video" ? "video-gen" : undefined,
         text: completion.text,
+        prompt: completion.prompt,
         modelId: completion.modelId,
         modelGlyph: completion.modelGlyph,
         modelName: completion.modelName,
@@ -158,7 +170,7 @@ function reducer(state, action) {
         tokens: completion.tokens,
         latency: completion.latency,
         ts: Date.now(),
-        streaming: true,
+        streaming: completion.kind === "text",
       };
       const title = c.messages.length === 0 ? action.text.slice(0, 60) : c.title;
       const updated = { ...c, title, messages: [...c.messages, userMsg, asstMsg], updatedAt: Date.now() };
