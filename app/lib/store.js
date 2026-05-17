@@ -138,6 +138,13 @@ function reducer(state, action) {
         id: uid("m"), role: "user", text: action.text, ts: Date.now(),
         cost: userCost, tokens: inputTokens, modelId: c.modelId,
       };
+      // If wallet is empty, push a limit-card placeholder instead of running the model.
+      if (state.wallet.balance < 0.5) {
+        const limitMsg = { id: uid("m"), role: "assistant", type: "limit", ts: Date.now() };
+        const title = c.messages.length === 0 ? action.text.slice(0, 60) : c.title;
+        const updated = { ...c, title, messages: [...c.messages, userMsg, limitMsg], updatedAt: Date.now() };
+        return { ...state, chats: { ...state.chats, byId: { ...state.chats.byId, [c.id]: updated } } };
+      }
       // generate assistant placeholder + run mock completion synchronously
       const completion = mockComplete({ prompt: action.text, modelId: c.modelId });
       const asstMsg = {

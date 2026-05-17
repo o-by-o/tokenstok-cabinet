@@ -1,11 +1,5 @@
-import { StubView } from "../../components/stub/StubView";
+import { CompareView } from "../../components/features/CompareView";
 
 export default function ComparePage() {
-  return (
-    <StubView
-      title="Сравнение"
-      eyebrow="1 промт · N моделей"
-      desc="Скоро. Один и тот же запрос отправляется в 2 модели одновременно, ответы лежат бок-о-бок."
-    />
-  );
+  return <CompareView />;
 }

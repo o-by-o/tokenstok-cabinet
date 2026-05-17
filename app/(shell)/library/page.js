@@ -1,11 +1,5 @@
-import { StubView } from "../../components/stub/StubView";
+import { LibraryView } from "../../components/features/LibraryView";
 
 export default function LibraryPage() {
-  return (
-    <StubView
-      title="Промпт-библиотека"
-      eyebrow="твои шаблоны"
-      desc="Скоро. Сохрани удачный промт, дай ему имя — используй одним тапом."
-    />
-  );
+  return <LibraryView />;
 }

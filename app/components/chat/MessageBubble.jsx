@@ -11,6 +11,7 @@ import { useEffect, useRef } from "react";
 import { useUi, useDispatch } from "../../lib/store";
 import { useStreamingMessage } from "../../lib/streaming";
 import { useLongPress } from "../../lib/hooks";
+import { LimitCard } from "./LimitCard";
 
 // ── per-token DOM renderers (one-shot streaming variants from the design)
 function renderTokenSpan(text, prev) {
@@ -104,6 +105,11 @@ export function MessageBubble({ message, streamKind = "token", showCost = true, 
         {showCost && <CostMeta message={message} right={true} />}
       </>
     );
+  }
+
+  // limit card replaces the normal assistant bubble when wallet was empty
+  if (message.type === "limit") {
+    return <LimitCard message={message} />;
   }
 
   // assistant
