@@ -14,7 +14,6 @@ import { Sidebar } from "./Sidebar";
 import { RightRail } from "./RightRail";
 import { MobileDrawer } from "./MobileDrawer";
 import { BottomTabBar } from "./BottomTabBar";
-import { StatusBar } from "../../cabinet/foundation";
 
 const STYLE = `
   .app-shell{
@@ -72,10 +71,6 @@ const STYLE = `
     background: var(--bg);
     position: relative;
   }
-
-  /* iOS status bar simulation — mobile only */
-  .app-shell .mobile-status{ display: block; }
-  @media (min-width: 1024px){ .app-shell .mobile-status{ display: none; } }
 
   .mobile-drawer-scrim{
     position: fixed; inset: 0;
@@ -140,7 +135,6 @@ export function AppShell({ children }) {
           <Sidebar/>
         </aside>
         <main className="app-main no-scroll-bars">
-          <div className="mobile-status"><StatusBar/></div>
           {children}
           <BottomTabBar/>
         </main>

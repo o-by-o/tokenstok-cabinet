@@ -2,10 +2,17 @@
 
 // Sheet.jsx — bottom sheet on mobile, centered modal on desktop.
 // Portal to <body>, swipe-to-dismiss on mobile, esc/scrim to close.
+//
+// Important: portaled content lives outside the AppShell's .ts-root wrapper,
+// so CSS variables (--card, --ink, etc.) don't resolve there. We re-wrap
+// the portal content in .ts-root.t-{theme} ourselves so the picker / sheet
+// styling stays themed.
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useBreakpoint, useEscape } from "../../lib/hooks";
+import { useUi } from "../../lib/store";
+import { TS_ACCENTS } from "../../cabinet/foundation";
 
 const STYLE = `
   .sh-scrim{
@@ -61,9 +68,17 @@ const STYLE = `
 
 export function Sheet({ children, onClose, label }) {
   const bp = useBreakpoint();
+  const ui = useUi();
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
   const panelRef = useRef(null);
+
+  // Pre-compute the same theme-root attrs AppShell uses so portaled
+  // descendants resolve var(--bg) / var(--ink) / var(--card) / etc.
+  const accentObj = TS_ACCENTS[ui.accent] || TS_ACCENTS.graphite;
+  const accentVal = ui.theme === "dark" ? accentObj.dark : accentObj.light;
+  const den = ui.density === "compact" ? 0.92 : ui.density === "comfy" ? 1.08 : 1;
+  const themeStyle = { "--den": den, "--accent": accentVal };
 
   // animate-in
   useEffect(() => {
@@ -123,7 +138,7 @@ export function Sheet({ children, onClose, label }) {
   if (!mounted || typeof document === "undefined") return null;
 
   return createPortal(
-    <>
+    <div className={`ts-root t-${ui.theme}`} style={themeStyle}>
       <style dangerouslySetInnerHTML={{ __html: STYLE }} />
       <div className={`sh-scrim ${open ? "open" : ""}`} onClick={requestClose} aria-hidden="true"/>
       <div className="sh-wrap">
@@ -132,7 +147,7 @@ export function Sheet({ children, onClose, label }) {
           <div className="sh-body no-scroll-bars">{children}</div>
         </div>
       </div>
-    </>,
+    </div>,
     document.body
   );
 }

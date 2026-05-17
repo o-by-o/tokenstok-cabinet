@@ -5,8 +5,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { TSIcon } from "../../cabinet/foundation";
-import { useDispatch } from "../../lib/store";
+import { TSIcon, TS_ACCENTS } from "../../cabinet/foundation";
+import { useDispatch, useUi } from "../../lib/store";
 import { useClickOutside, useEscape } from "../../lib/hooks";
 
 const STYLE = `
@@ -44,6 +44,11 @@ const ACTIONS = [
 export function LongPressMenu({ info, chat, onClose }) {
   const popRef = useRef(null);
   const [pos, setPos] = useState({ x: info.x, y: info.y });
+  const ui = useUi();
+  const accentObj = TS_ACCENTS[ui.accent] || TS_ACCENTS.graphite;
+  const accentVal = ui.theme === "dark" ? accentObj.dark : accentObj.light;
+  const den = ui.density === "compact" ? 0.92 : ui.density === "comfy" ? 1.08 : 1;
+  const themeStyle = { "--den": den, "--accent": accentVal };
 
   useClickOutside(popRef, onClose, true);
   useEscape(onClose, true);
@@ -95,7 +100,7 @@ export function LongPressMenu({ info, chat, onClose }) {
   };
 
   return createPortal(
-    <>
+    <div className={`ts-root t-${ui.theme}`} style={themeStyle}>
       <style dangerouslySetInnerHTML={{ __html: STYLE }} />
       <div className="lp-scrim" onClick={onClose}/>
       <div className="lp-pop" ref={popRef} style={{ left: pos.x, top: pos.y }}>
@@ -107,7 +112,7 @@ export function LongPressMenu({ info, chat, onClose }) {
           </div>
         ))}
       </div>
-    </>,
+    </div>,
     document.body
   );
 }
