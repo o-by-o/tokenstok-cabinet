@@ -24,7 +24,9 @@ const TS_MODELS_FOR_COST = TS_MODELS;
 // SEED_NOW so the rendered text matches across server and client.
 let CLIENT_BOOT_TS = null;
 
-const KEY = "tokenstok:v1";
+// Bump when the persisted state shape changes incompatibly. Old keys (v1)
+// keep their data on disk but are ignored on load — fresh seed wins.
+const KEY = "tokenstok:v2";
 
 // ── seed ──────────────────────────────────────────────────────────
 // Build initial chats from TS_HISTORY. Deterministic — no Date.now(), no
@@ -246,14 +248,13 @@ function loadPersisted() {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return parsed && parsed.__v === 1 ? parsed.state : null;
+    return parsed && parsed.__v === 2 ? parsed.state : null;
   } catch { return null; }
 }
 function savePersisted(state) {
   try {
-    // strip ephemeral ui keys before persist
     const ui = { theme: state.ui.theme, accent: state.ui.accent, density: state.ui.density, streamKind: state.ui.streamKind, showCost: state.ui.showCost, sidebarOpen: false, sheet: null, longPress: null };
-    localStorage.setItem(KEY, JSON.stringify({ __v: 1, state: { ...state, ui } }));
+    localStorage.setItem(KEY, JSON.stringify({ __v: 2, state: { ...state, ui } }));
   } catch {}
 }
 

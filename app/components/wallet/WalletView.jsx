@@ -81,8 +81,20 @@ export function WalletView() {
 
   const topup = (amount) => dispatch({ type: "wallet/topup", amount });
 
-  // wallet.byModel is now an array of {id, glyph, n, c}
-  const breakdown = state.wallet.byModel || [];
+  // wallet.byModel is an array of {id, glyph, n, c}.
+  // Tolerate the older {id: cost} object shape from before the schema change,
+  // so persisted localStorage from earlier sessions doesn't crash the page.
+  const rawByModel = state.wallet?.byModel;
+  const breakdown = Array.isArray(rawByModel)
+    ? rawByModel
+    : rawByModel && typeof rawByModel === "object"
+      ? Object.entries(rawByModel).map(([id, c]) => ({
+          id,
+          glyph: id.slice(0, 2).toUpperCase(),
+          n: Math.max(1, Math.round(Number(c) * 10)),
+          c: Number(c) || 0,
+        }))
+      : [];
 
   return (
     <>
