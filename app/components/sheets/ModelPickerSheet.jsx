@@ -54,9 +54,11 @@ const STYLE = `
   .pk-allbtn:hover{ color:var(--ink); border-color:var(--ink); }
 `;
 
+// Mirrors screens-chat.js ScreenPicker tabs verbatim
 const TABS = [
   { id: "all",   label: "Все" },
   { id: "text",  label: "Текст" },
+  { id: "code",  label: "Код" },
   { id: "image", label: "Картинки" },
   { id: "video", label: "Видео" },
   { id: "voice", label: "Голос" },
@@ -66,25 +68,32 @@ export function ModelPickerSheet({ onClose }) {
   const { state } = useApp();
   const dispatch = useDispatch();
   const [tab, setTab] = useState("all");
-  const [showFiller, setShowFiller] = useState(false);
+  const [showAll, setShowAll] = useState(false);
 
   const currentId = state.models.currentId;
 
+  // "Код" tab maps to text models tagged with «код» in data.js
+  const matchesTab = (m, t) => {
+    if (t === "all") return true;
+    if (t === "code") return m.kind === "text" && /код/i.test(m.tag || "");
+    return m.kind === t;
+  };
+
   const models = useMemo(() => {
-    const base = tab === "all" ? TS_MODELS : TS_MODELS.filter((m) => m.kind === tab);
-    if (!showFiller) return base;
-    // synth filler so "218 моделей" feels real
-    const extra = Array.from({ length: 200 - base.length }, (_, i) => ({
-      id: `synth-${i}`,
+    const base = TS_MODELS.filter((m) => matchesTab(m, tab));
+    if (!showAll) return base;
+    // synth filler so "218 моделей" feels real after "смотреть все"
+    const filler = Array.from({ length: Math.max(0, 218 - base.length) }, (_, i) => ({
+      id: `synth-${i + 1}`,
       name: `Model ${String(i + 1).padStart(3, "0")}`,
-      glyph: ("ab" + (i % 26)).slice(-2).toUpperCase(),
+      glyph: String.fromCharCode(65 + (i % 26)) + String.fromCharCode(65 + ((i * 7) % 26)),
       vendor: ["Anthropic", "OpenAI", "Google", "Meta", "Mistral", "Cohere", "BFL", "Stability"][i % 8],
       kind: ["text", "image", "video", "voice"][i % 4],
       price: (Math.random() * 5 + 0.1).toFixed(2).replace(".", ","),
       unit: "₽ / 1k вх",
-    }));
-    return [...base, ...extra];
-  }, [tab, showFiller]);
+    })).filter((m) => matchesTab(m, tab));
+    return [...base, ...filler];
+  }, [tab, showAll]);
 
   const pick = (m) => {
     dispatch({ type: "chat/setModel", modelId: m.id });
@@ -97,7 +106,7 @@ export function ModelPickerSheet({ onClose }) {
       <div className="pk-hd">
         <div>
           <div className="ttl">Модель</div>
-          <div className="sub">{showFiller ? "218" : TS_MODELS.length} в каталоге · {state.models.recentIds.length} недавних</div>
+          <div className="sub">218 в каталоге · {state.models.recentIds.length} недавних</div>
         </div>
         <button className="search">{TSIcon.search({})} поиск</button>
       </div>
@@ -120,7 +129,7 @@ export function ModelPickerSheet({ onClose }) {
               <span className="gly">{m.glyph}</span>
               <div className="meta">
                 <div className="n">
-                  <span>{m.name}</span>
+                  <span style={{ fontFamily:"var(--mono)", fontSize:14, fontWeight:600 }}>{m.id}</span>
                   {m.hot && <span className="hot">⚡ хит</span>}
                 </div>
                 <div className="v">{m.vendor}{m.tag ? ` · ${m.tag}` : ""}</div>
@@ -133,8 +142,8 @@ export function ModelPickerSheet({ onClose }) {
             </div>
           );
         })}
-        {!showFiller && (
-          <button className="pk-allbtn" onClick={() => setShowFiller(true)}>
+        {!showAll && (
+          <button className="pk-allbtn" onClick={() => setShowAll(true)}>
             смотреть все 218 →
           </button>
         )}

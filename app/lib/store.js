@@ -15,6 +15,10 @@ import { TS_HISTORY, TS_MODELS, TS_RECENT_MODELS } from "../cabinet/data";
 import { mockComplete } from "./streaming";
 import { uid, timeOfDay } from "./utils";
 
+// alias so the reducer (defined below before AppProvider imports the data
+// indirectly) can read the catalog
+const TS_MODELS_FOR_COST = TS_MODELS;
+
 const KEY = "tokenstok:v1";
 
 // ── seed ──────────────────────────────────────────────────────────
@@ -36,8 +40,8 @@ function seedChats() {
       updatedAt: now - (i + 1) * 3600_000,
       // a preview-only chat: one user msg + one assistant msg
       messages: [
-        { id: uid("m"), role: "user", text: h.preview.replace(/…$/, ""), ts: now - (i + 1) * 3600_000 - 4000 },
-        { id: uid("m"), role: "assistant", text: previewAnswer(h.title), modelId: h.model, cost: 0.0042 + i * 0.001, tokens: 30 + i * 8, ts: now - (i + 1) * 3600_000 },
+        { id: uid("m"), role: "user",      text: h.preview.replace(/…$/, ""), modelId: h.model, cost: 0.0008 + i * 0.0003, tokens: 10 + i * 2, ts: now - (i + 1) * 3600_000 - 4000 },
+        { id: uid("m"), role: "assistant", text: previewAnswer(h.title), modelId: h.model, cost: 0.0042 + i * 0.001, tokens: 30 + i * 8, latency: 220 + i * 30, ts: now - (i + 1) * 3600_000 },
       ],
     };
   });
@@ -125,7 +129,15 @@ function reducer(state, action) {
     case "msg/sendUser": {
       const c = state.chats.byId[state.chats.currentId];
       if (!c) return state;
-      const userMsg = { id: uid("m"), role: "user", text: action.text, ts: Date.now() };
+      // approximate input cost: ~4 chars/token, model price per 1k input
+      const m = TS_MODELS_FOR_COST.find((x) => x.id === c.modelId);
+      const inputTokens = Math.max(3, Math.ceil(action.text.length / 4));
+      const ppk = m ? Number((m.price || "0").replace(",", ".")) : 2.88;
+      const userCost = (inputTokens / 1000) * ppk;
+      const userMsg = {
+        id: uid("m"), role: "user", text: action.text, ts: Date.now(),
+        cost: userCost, tokens: inputTokens, modelId: c.modelId,
+      };
       // generate assistant placeholder + run mock completion synchronously
       const completion = mockComplete({ prompt: action.text, modelId: c.modelId });
       const asstMsg = {

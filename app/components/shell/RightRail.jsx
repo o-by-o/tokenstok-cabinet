@@ -57,8 +57,8 @@ export function RightRail() {
           <div className="rr-model">
             <span className="gly">{model?.glyph}</span>
             <div style={{ flex:1, minWidth:0 }}>
-              <div className="nm">{model?.name}</div>
-              <div className="v">{model?.vendor}</div>
+              <div className="nm" style={{ fontFamily:"var(--mono)", fontWeight:600, fontSize:13.5, letterSpacing:0 }}>{model?.id}</div>
+              <div className="v">{model?.vendor}{model?.tag ? ` · ${model.tag}` : ""}</div>
               <div className="pr">{model?.price} · {model?.unit}</div>
             </div>
           </div>

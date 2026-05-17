@@ -1,15 +1,13 @@
 "use client";
 
 // AppShell.jsx — responsive 3-column shell.
-// Mobile (<768): main only, sidebar = overlay drawer triggered from header
-// Tablet (768-1023): sidebar collapsed icon-rail + main
-// Desktop (≥1024): sidebar 280 + main, no rail by default
-// Wide (≥1440): sidebar 280 + main + rail 320
+// Layout is driven by CSS media queries (no JS-based bp checks), so SSR and
+// client render identical DOM — no hydration mismatch. JS state only controls
+// the mobile drawer open/close.
 
 import { useEffect } from "react";
 import { TS_ACCENTS } from "../../cabinet/foundation";
-import { useApp, useUi, useDispatch } from "../../lib/store";
-import { useBreakpoint } from "../../lib/hooks";
+import { useUi, useDispatch } from "../../lib/store";
 import { Sidebar } from "./Sidebar";
 import { RightRail } from "./RightRail";
 import { MobileDrawer } from "./MobileDrawer";
@@ -22,25 +20,49 @@ const STYLE = `
     background: var(--bg);
     color: var(--ink);
     display: grid;
-    grid-template-columns: var(--sidebar-w) 1fr;
+    grid-template-columns: 1fr;                /* mobile default */
+    grid-template-areas: "main";
   }
-  .app-shell.wide{ grid-template-columns: var(--sidebar-w) 1fr var(--rail-w); }
-  .app-shell.mobile{ grid-template-columns: 1fr; }
+  /* desktop */
+  @media (min-width: 1024px){
+    .app-shell{
+      grid-template-columns: var(--sidebar-w) 1fr;
+      grid-template-areas: "side main";
+    }
+  }
+  /* wide */
+  @media (min-width: 1440px){
+    .app-shell{
+      grid-template-columns: var(--sidebar-w) 1fr var(--rail-w);
+      grid-template-areas: "side main rail";
+    }
+  }
 
-  .app-shell aside.app-sidebar{
+  .app-shell > aside.app-sidebar{
+    grid-area: side;
     background: var(--bg);
     border-right: 1px solid var(--line);
     height: 100dvh; position: sticky; top: 0;
-    overflow: hidden; display: flex; flex-direction: column;
+    overflow: hidden; display: none; flex-direction: column;
   }
-  .app-shell aside.app-rail{
+  @media (min-width: 1024px){
+    .app-shell > aside.app-sidebar{ display: flex; }
+  }
+
+  .app-shell > aside.app-rail{
+    grid-area: rail;
     background: var(--bg);
     border-left: 1px solid var(--line);
     height: 100dvh; position: sticky; top: 0;
-    overflow: hidden; display: flex; flex-direction: column;
+    overflow: hidden; display: none; flex-direction: column;
     padding: 14px 14px 18px;
   }
-  .app-shell main.app-main{
+  @media (min-width: 1440px){
+    .app-shell > aside.app-rail{ display: flex; }
+  }
+
+  .app-shell > main.app-main{
+    grid-area: main;
     min-width: 0; min-height: 100dvh;
     display: flex; flex-direction: column;
     background: var(--bg);
@@ -66,58 +88,50 @@ const STYLE = `
     display: flex; flex-direction: column;
   }
   .mobile-drawer.open{ transform: translateX(0); }
+  @media (min-width: 1024px){
+    .mobile-drawer-scrim, .mobile-drawer{ display: none; }
+  }
 `;
 
 export function AppShell({ children }) {
   const ui = useUi();
   const dispatch = useDispatch();
-  const bp = useBreakpoint();
 
-  // Lock body scroll when drawer / sheet is open (mobile)
+  // Lock body scroll when drawer / sheet is open (relevant on mobile only)
   useEffect(() => {
-    if (bp.isMobile && (ui.sidebarOpen || ui.sheet)) {
+    if (ui.sidebarOpen || ui.sheet) {
       const prev = document.body.style.overflow;
       document.body.style.overflow = "hidden";
       return () => { document.body.style.overflow = prev; };
     }
-  }, [bp.isMobile, ui.sidebarOpen, ui.sheet]);
+  }, [ui.sidebarOpen, ui.sheet]);
 
   const accent = (TS_ACCENTS[ui.accent] || TS_ACCENTS.graphite);
   const accentVal = ui.theme === "dark" ? accent.dark : accent.light;
   const den = ui.density === "compact" ? 0.92 : ui.density === "comfy" ? 1.08 : 1;
 
-  const shellClass = ["app-shell", `ts-root t-${ui.theme}`, bp.isMobile ? "mobile" : bp.isWide ? "wide" : ""].filter(Boolean).join(" ");
-
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: STYLE }} />
-      <div className={shellClass} style={{ "--den": den, "--accent": accentVal }}>
-        {!bp.isMobile && (
-          <aside className="app-sidebar no-scroll-bars">
-            <Sidebar/>
-          </aside>
-        )}
+      <div className={`app-shell ts-root t-${ui.theme}`} style={{ "--den": den, "--accent": accentVal }}>
+        <aside className="app-sidebar no-scroll-bars">
+          <Sidebar/>
+        </aside>
         <main className="app-main no-scroll-bars">
           {children}
         </main>
-        {bp.isWide && (
-          <aside className="app-rail no-scroll-bars">
-            <RightRail/>
-          </aside>
-        )}
+        <aside className="app-rail no-scroll-bars">
+          <RightRail/>
+        </aside>
       </div>
 
-      {bp.isMobile && (
-        <>
-          <div
-            className={`mobile-drawer-scrim ${ui.sidebarOpen ? "open" : ""}`}
-            onClick={() => dispatch({ type: "ui/setSidebar", open: false })}
-          />
-          <div className={`ts-root t-${ui.theme} mobile-drawer ${ui.sidebarOpen ? "open" : ""}`} style={{ "--den": den, "--accent": accentVal }}>
-            <MobileDrawer/>
-          </div>
-        </>
-      )}
+      <div
+        className={`mobile-drawer-scrim ${ui.sidebarOpen ? "open" : ""}`}
+        onClick={() => dispatch({ type: "ui/setSidebar", open: false })}
+      />
+      <div className={`ts-root t-${ui.theme} mobile-drawer ${ui.sidebarOpen ? "open" : ""}`} style={{ "--den": den, "--accent": accentVal }}>
+        <MobileDrawer/>
+      </div>
     </>
   );
 }
