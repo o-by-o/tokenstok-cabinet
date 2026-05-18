@@ -35,8 +35,32 @@ export function detectIntent(prompt) {
   return "text";
 }
 
+// Mock vision: if the user attached image(s), pretend to "see" them and
+// respond with a plausible description.
+function describeAttachments(attachments) {
+  const imgs = attachments.filter((a) => a.isImage);
+  const docs = attachments.filter((a) => !a.isImage);
+  const parts = [];
+  if (imgs.length === 1) parts.push(`Вижу картинку ${imgs[0].name}. Похоже на скриншот / фото — детали распознал, могу подсказать по содержимому.`);
+  else if (imgs.length > 1) parts.push(`Вижу ${imgs.length} картинок (${imgs.map(i=>i.name).join(", ")}). Сравнить по содержимому или описать каждую?`);
+  if (docs.length) parts.push(`Документ${docs.length>1?"ы":""}: ${docs.map(d=>d.name).join(", ")}. Готов сжать в тезисы, перевести или ответить на вопросы по содержимому.`);
+  return parts.join("\n") || "Файл получил.";
+}
+
 // Synchronously produce the canned assistant message. The hook handles timing.
-export function mockComplete({ prompt, modelId }) {
+export function mockComplete({ prompt, modelId, attachments }) {
+  // attachments take precedence — pretend vision works
+  if (attachments && attachments.length > 0) {
+    const text = describeAttachments(attachments) + (prompt && prompt !== "[файл]" ? `\n\nПо твоему вопросу: ${prompt.slice(0, 200)} — отвечаю в режиме демо, реального vision пока нет.` : "");
+    const m = TS_MODELS.find((x) => x.id === modelId) || TS_MODELS[1];
+    return {
+      kind: "text", text,
+      modelId: m.id, modelGlyph: m.glyph, modelName: m.name,
+      cost: 0.012 + attachments.length * 0.004,
+      tokens: 60 + attachments.length * 25,
+      latency: 380,
+    };
+  }
   const intent = detectIntent(prompt);
   if (intent === "image") {
     const m = TS_MODELS.find((x) => x.id === "dalle-4") || TS_MODELS[7];

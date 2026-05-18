@@ -164,6 +164,7 @@ function reducer(state, action) {
       const userMsg = {
         id: uid("m"), role: "user", text: action.text, ts: Date.now(),
         cost: userCost, tokens: inputTokens, modelId: c.modelId,
+        attachments: action.attachments || undefined,
       };
       // If wallet is empty, push a limit-card placeholder instead of running the model.
       if (state.wallet.balance < 0.5) {
@@ -173,7 +174,7 @@ function reducer(state, action) {
         return { ...state, chats: { ...state.chats, byId: { ...state.chats.byId, [c.id]: updated } } };
       }
       // generate assistant placeholder + run mock completion synchronously
-      const completion = mockComplete({ prompt: action.text, modelId: c.modelId });
+      const completion = mockComplete({ prompt: action.text, modelId: c.modelId, attachments: action.attachments });
       const asstMsg = {
         id: uid("m"),
         role: "assistant",

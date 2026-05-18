@@ -78,6 +78,51 @@ function StreamedText({ text, effect = "token", mono = false }) {
   return <span ref={ref} style={{ whiteSpace: "pre-wrap", fontFamily: mono ? "var(--mono)" : undefined, fontSize: mono ? "14px" : undefined }}/>;
 }
 
+// ── attachments — user-side, right-aligned
+function UserAttachments({ attachments }) {
+  return (
+    <>
+      <style dangerouslySetInnerHTML={{ __html: `
+        .ua{ align-self:flex-end; max-width:84%; display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; margin-bottom:4px; }
+        .ua-img{ width:140px; height:140px; border-radius:14px; overflow:hidden; background:var(--card); border:1px solid var(--line); display:block; }
+        .ua-img img{ width:100%; height:100%; object-fit:cover; display:block; }
+        .ua-img.fallback{ display:grid; place-items:center; font-family:var(--mono); font-size:11px; color:var(--mute); }
+        .ua-doc{
+          display:inline-flex; align-items:center; gap:8px;
+          padding:6px 10px 6px 6px;
+          background:var(--card); border:1px solid var(--line); border-radius:12px;
+          font:500 12px var(--sans); color:var(--ink2);
+          max-width:220px;
+        }
+        .ua-doc .ext{
+          width:34px; height:34px; border-radius:7px;
+          background:var(--chip); border:1px solid var(--line2);
+          display:grid; place-items:center;
+          font-family:var(--mono); font-weight:700; font-size:10px; color:var(--mute);
+          text-transform:uppercase; letter-spacing:.04em; flex-shrink:0;
+        }
+        .ua-doc .nm{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; }
+        .ua-doc .sz{ font-family:var(--mono); font-size:10px; color:var(--mute); }
+      ` }} />
+      <div className="ua">
+        {attachments.map((a) => a.isImage ? (
+          <div key={a.id} className={`ua-img ${a.url ? "" : "fallback"}`}>
+            {a.url ? <img src={a.url} alt={a.name}/> : <span>{a.name}</span>}
+          </div>
+        ) : (
+          <div key={a.id} className="ua-doc" title={a.name}>
+            <span className="ext">{a.ext || "?"}</span>
+            <div style={{ display:"flex", flexDirection:"column", minWidth:0 }}>
+              <span className="nm">{a.name}</span>
+              <span className="sz">{a.size < 1024 ? `${a.size} б` : a.size < 1024*1024 ? `${Math.round(a.size/1024)} КБ` : `${(a.size/1024/1024).toFixed(1)} МБ`}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
 // ── cost meta rendering (matches the mockup: ₽ + ток + model on both sides)
 function CostMeta({ message, right }) {
   if (message.cost === undefined) return null;
@@ -103,7 +148,10 @@ export function MessageBubble({ message, streamKind = "token", showCost = true, 
   if (message.role === "user") {
     return (
       <>
-        <div className="ts-q">{message.text}</div>
+        {message.attachments && message.attachments.length > 0 && (
+          <UserAttachments attachments={message.attachments} />
+        )}
+        {message.text && message.text !== "[файл]" && <div className="ts-q">{message.text}</div>}
         {showCost && <CostMeta message={message} right={true} />}
       </>
     );
