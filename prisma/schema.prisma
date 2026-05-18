@@ -1,0 +1,28 @@
+// Tokenstok-cabinet Prisma schema.
+// Single User table — minimal viable account model. NextAuth.js v5 uses
+// JWT sessions so no Session/Account/VerificationToken tables needed yet.
+// (Password reset tokens will land here when we add the recovery flow.)
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]  // alpine in Dockerfile
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  emailVerified   DateTime?
+  name            String?
+  hashedPassword  String
+  balance         Decimal  @default(100) @db.Decimal(10, 2)  // 100 ₽ welcome credit
+  role            String   @default("user")                  // "user" | "admin"
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([email])
+}

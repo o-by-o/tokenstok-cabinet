@@ -4,6 +4,7 @@
 // Replaces the canvas-era floating Tweaks panel.
 
 import Link from "next/link";
+import { signOut, useSession } from "next-auth/react";
 import { useBreakpoint } from "../../lib/hooks";
 import { useUi, useDispatch } from "../../lib/store";
 import { TSIcon } from "../../cabinet/foundation";
@@ -109,12 +110,37 @@ export function SettingsView() {
             </div>
 
             <div className="sv-section">Аккаунт</div>
-            <div className="sv-row">
-              <div><div className="lbl">Аня Кравченко</div><div className="desc">bateninsolegs1@gmail.com</div></div>
-            </div>
+            <SettingsAccount/>
           </div>
         </div>
       </div>
     </>
   );
 }
+
+function SettingsAccount(){
+  const { data: session } = useSession();
+  const name = session?.user?.name || session?.user?.email?.split("@")[0] || "—";
+  const email = session?.user?.email || "—";
+  return (
+    <>
+      <div className="sv-row">
+        <div><div className="lbl">{name}</div><div className="desc">{email}</div></div>
+      </div>
+      <div className="sv-row">
+        <div><div className="lbl">Выйти</div><div className="desc">завершить сессию на этом устройстве</div></div>
+        <button
+          onClick={() => signOut({ callbackUrl: "/login" })}
+          style={{
+            background: "transparent", border: "1px solid var(--line)", borderRadius: 10,
+            padding: "8px 14px", fontFamily: "var(--sans)", fontSize: 13, fontWeight: 600,
+            color: "var(--ink)", cursor: "pointer",
+          }}
+        >
+          Выйти →
+        </button>
+      </div>
+    </>
+  );
+}
+
