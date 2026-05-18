@@ -156,7 +156,6 @@ function reducer(state, action) {
     case "msg/sendUser": {
       const c = state.chats.byId[state.chats.currentId];
       if (!c) return state;
-      // approximate input cost: ~4 chars/token, model price per 1k input
       const m = TS_MODELS_FOR_COST.find((x) => x.id === c.modelId);
       const inputTokens = Math.max(3, Math.ceil(action.text.length / 4));
       const ppk = m ? Number((m.price || "0").replace(",", ".")) : 2.88;
@@ -166,29 +165,45 @@ function reducer(state, action) {
         cost: userCost, tokens: inputTokens, modelId: c.modelId,
         attachments: action.attachments || undefined,
       };
-      // If wallet is empty, push a limit-card placeholder instead of running the model.
       if (state.wallet.balance < 0.5) {
         const limitMsg = { id: uid("m"), role: "assistant", type: "limit", ts: Date.now() };
         const title = c.messages.length === 0 ? action.text.slice(0, 60) : c.title;
         const updated = { ...c, title, messages: [...c.messages, userMsg, limitMsg], updatedAt: Date.now() };
         return { ...state, chats: { ...state.chats, byId: { ...state.chats.byId, [c.id]: updated } } };
       }
-      // generate assistant placeholder + run mock completion synchronously
-      const completion = mockComplete({ prompt: action.text, modelId: c.modelId, attachments: action.attachments });
+      // Detect media intent up-front — those still go through the mock pipeline
+      // (real image/video gen via gateway lives in a separate route).
+      const intent = (() => {
+        const p = action.text.toLowerCase();
+        if (/(\b)?(видео|video|sora|veo|5\s*сек(унд)?)/.test(p)) return "video";
+        if (/(нарисуй|draw|generate (an? )?image|обложк|иконк|сгенери(руй|ровать)|midjourney|dalle|flux)/.test(p)) return "image";
+        return "text";
+      })();
+      if (intent !== "text") {
+        const completion = mockComplete({ prompt: action.text, modelId: c.modelId, attachments: action.attachments });
+        const asstMsg = {
+          id: uid("m"), role: "assistant",
+          type: intent === "image" ? "image-gen" : "video-gen",
+          prompt: completion.prompt,
+          modelId: completion.modelId, modelGlyph: completion.modelGlyph, modelName: completion.modelName,
+          cost: completion.cost, tokens: completion.tokens, latency: completion.latency,
+          ts: Date.now(), streaming: false,
+        };
+        const title = c.messages.length === 0 ? action.text.slice(0, 60) : c.title;
+        const updated = { ...c, title, messages: [...c.messages, userMsg, asstMsg], updatedAt: Date.now() };
+        return { ...state, chats: { ...state.chats, byId: { ...state.chats.byId, [c.id]: updated } } };
+      }
+      // Real text: create empty streaming placeholder; ChatView's effect fetches /api/chat.
       const asstMsg = {
         id: uid("m"),
         role: "assistant",
-        type: completion.kind === "image" ? "image-gen" : completion.kind === "video" ? "video-gen" : undefined,
-        text: completion.text,
-        prompt: completion.prompt,
-        modelId: completion.modelId,
-        modelGlyph: completion.modelGlyph,
-        modelName: completion.modelName,
-        cost: completion.cost,
-        tokens: completion.tokens,
-        latency: completion.latency,
+        text: "",
+        modelId: c.modelId,
+        modelGlyph: (m && m.glyph) || "AI",
+        modelName: (m && m.name) || c.modelId,
+        cost: 0, tokens: 0,
         ts: Date.now(),
-        streaming: completion.kind === "text",
+        streaming: true,
       };
       const title = c.messages.length === 0 ? action.text.slice(0, 60) : c.title;
       const updated = { ...c, title, messages: [...c.messages, userMsg, asstMsg], updatedAt: Date.now() };
@@ -203,7 +218,19 @@ function reducer(state, action) {
     case "msg/finishStreaming": {
       const c = state.chats.byId[state.chats.currentId];
       if (!c) return state;
-      const messages = c.messages.map((m) => (m.id === action.id ? { ...m, streaming: false } : m));
+      const messages = c.messages.map((m) => (m.id === action.id ? { ...m, streaming: false, ...(action.patch || {}) } : m));
+      return { ...state, chats: { ...state.chats, byId: { ...state.chats.byId, [c.id]: { ...c, messages } } } };
+    }
+    case "msg/streamChunk": {
+      const c = state.chats.byId[state.chats.currentId];
+      if (!c) return state;
+      const messages = c.messages.map((m) => (m.id === action.id ? { ...m, text: (m.text || "") + action.chunk } : m));
+      return { ...state, chats: { ...state.chats, byId: { ...state.chats.byId, [c.id]: { ...c, messages } } } };
+    }
+    case "msg/streamFail": {
+      const c = state.chats.byId[state.chats.currentId];
+      if (!c) return state;
+      const messages = c.messages.map((m) => (m.id === action.id ? { ...m, text: action.text || "Ошибка генерации. Попробуй ещё раз.", streaming: false, error: true } : m));
       return { ...state, chats: { ...state.chats, byId: { ...state.chats.byId, [c.id]: { ...c, messages } } } };
     }
     case "msg/regenerate": {

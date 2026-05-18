@@ -2,8 +2,13 @@
 
 // ChatView.jsx — orchestrates a single chat: header + (empty | list) + composer
 // + the sheets that float on top (model picker, voice, long-press menu).
+//
+// Real-stream effect: watches for a new "empty + streaming:true" assistant
+// message at the tail of the chat. When it appears, fetch /api/chat with the
+// full message history → read the plain-text stream → dispatch chunks until
+// EOF, then finishStreaming. Errors fall back to a message-level error.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChatHeader } from "./ChatHeader";
 import { MessageList } from "./MessageList";
 import { EmptyChat } from "./EmptyChat";
@@ -27,6 +32,62 @@ export function ChatView() {
   const dispatch = useDispatch();
   const [longPress, setLongPress] = useState(null);
   const empty = !chat || chat.messages.length === 0;
+
+  // Stream effect: handle empty streaming-assistant messages.
+  // We track which message we've already started streaming so we don't fire
+  // duplicate requests (e.g. when chat state churns from cost meta updates).
+  const startedRef = useRef(new Set());
+  useEffect(() => {
+    if (!chat || chat.messages.length === 0) return;
+    const last = chat.messages[chat.messages.length - 1];
+    if (last.role !== "assistant" || !last.streaming || last.text !== "") return;
+    if (startedRef.current.has(last.id)) return;
+    startedRef.current.add(last.id);
+
+    // Build UIMessage[] from the chat history (excluding the empty placeholder)
+    const uiMessages = chat.messages
+      .slice(0, -1)
+      .filter((m) => m.role === "user" || (m.role === "assistant" && !m.streaming && m.text))
+      .map((m) => ({
+        id: m.id,
+        role: m.role,
+        parts: [{ type: "text", text: m.text }],
+      }));
+
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ messages: uiMessages, modelId: chat.modelId }),
+          signal: controller.signal,
+        });
+        if (!res.ok) {
+          let msg = `Ошибка ${res.status}`;
+          try { const e = await res.json(); if (e?.error) msg = e.error; } catch {}
+          dispatch({ type: "msg/streamFail", id: last.id, text: msg });
+          return;
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          if (chunk) dispatch({ type: "msg/streamChunk", id: last.id, chunk });
+        }
+        dispatch({ type: "msg/finishStreaming", id: last.id });
+      } catch (err) {
+        if (err.name === "AbortError") return;
+        console.error("[chat] stream failed", err);
+        dispatch({ type: "msg/streamFail", id: last.id, text: "Сеть упала. Попробуй ещё раз." });
+      }
+    })();
+
+    return () => controller.abort();
+  }, [chat, dispatch]);
 
   return (
     <>

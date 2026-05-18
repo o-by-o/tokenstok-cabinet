@@ -205,19 +205,13 @@ export function MessageBubble({ message, streamKind = "token", showCost = true, 
 }
 
 function AssistantStreaming({ text, effect, messageId }) {
-  const dispatch = useDispatch();
-  const { visible, isStreaming } = useStreamingMessage(text, { msPerChar: 12 });
-  const finishedRef = useRef(false);
-  useEffect(() => {
-    if (!isStreaming && !finishedRef.current && visible === text) {
-      finishedRef.current = true;
-      dispatch({ type: "msg/finishStreaming", id: messageId });
-    }
-  }, [isStreaming, visible, text, messageId, dispatch]);
+  // Real stream: text grows over time as chunks arrive from /api/chat → we
+  // render directly. The chunks already provide the "live" feeling — no need
+  // to artificially typewriter on top.
   return (
     <>
-      <StreamedText text={visible} effect={effect} mono={effect === "phosphor"}/>
-      {isStreaming && <span className="ts-caret"/>}
+      <StreamedText text={text} effect={effect} mono={effect === "phosphor"}/>
+      <span className="ts-caret"/>
     </>
   );
 }
