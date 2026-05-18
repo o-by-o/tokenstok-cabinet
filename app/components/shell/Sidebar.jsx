@@ -10,12 +10,13 @@ import { TSIcon } from "../../cabinet/foundation";
 import { TS_MODELS } from "../../cabinet/data";
 import { useApp, useChatList, useDispatch } from "../../lib/store";
 import { relTime, fmtRub } from "../../lib/utils";
+import { Logo } from "../brand/Logo";
 
 const STYLE = `
   .sb{ display:flex; flex-direction:column; height:100%; min-height:0; }
   .sb-hd{ padding:14px 16px 10px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
-  .sb-hd .brand{ font-weight:800; font-size:18px; letter-spacing:-0.02em; }
-  .sb-hd .brand small{ color:var(--mute); font-weight:500; font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; display:block; margin-top:1px; }
+  .sb-hd .brand{ display:flex; flex-direction:column; gap:4px; min-width:0; }
+  .sb-hd .brand small{ color:var(--mute); font-weight:500; font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; }
   .sb-newbtn{
     width:34px; height:34px; border-radius:50%;
     display:grid; place-items:center;
@@ -161,7 +162,10 @@ export function Sidebar() {
       <style dangerouslySetInnerHTML={{ __html: STYLE }} />
       <div className="sb">
         <div className="sb-hd">
-          <div className="brand">ТокенСток<small>218 моделей · оплата по факту</small></div>
+          <div className="brand">
+            <Logo/>
+            <small>218 моделей · оплата по факту</small>
+          </div>
           <button className="sb-newbtn" aria-label="Новый чат" onClick={newChat}>{TSIcon.plus({ width: 16, height: 16 })}</button>
         </div>
 
