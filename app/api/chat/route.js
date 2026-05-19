@@ -67,15 +67,55 @@ export async function POST(req) {
     });
   }
 
-  const result = streamText({
-    model: gateway(gatewayModelId),
-    messages: convertToModelMessages(messages),
-    maxOutputTokens: 1024,
-    onError({ error }) {
-      console.error("[tokenstok /api/chat] streamText error:", error);
+  let modelMessages;
+  try {
+    modelMessages = convertToModelMessages(messages);
+  } catch (err) {
+    console.error("[tokenstok /api/chat] convertToModelMessages failed:", err);
+    return new Response(JSON.stringify({ error: "Невалидный формат сообщений: " + (err?.message || String(err)) }), {
+      status: 400, headers: { "content-type": "application/json" },
+    });
+  }
+
+  let result;
+  try {
+    result = streamText({
+      model: gateway(gatewayModelId),
+      messages: modelMessages,
+      maxOutputTokens: 1024,
+      onError({ error }) {
+        console.error("[tokenstok /api/chat] streamText onError:", error);
+      },
+    });
+  } catch (err) {
+    console.error("[tokenstok /api/chat] streamText threw:", err);
+    return new Response(JSON.stringify({ error: "AI Gateway не отвечает: " + (err?.message || String(err)) }), {
+      status: 502, headers: { "content-type": "application/json" },
+    });
+  }
+
+  // Stream вручную: оборачиваем textStream в ReadableStream и отдаём как text/plain.
+  // (toTextStreamResponse в некоторых сценариях AI SDK v6 + gateway падал на n.some.)
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        for await (const chunk of result.textStream) {
+          controller.enqueue(encoder.encode(chunk));
+        }
+        controller.close();
+      } catch (err) {
+        console.error("[tokenstok /api/chat] textStream iteration failed:", err);
+        controller.enqueue(encoder.encode("\n\n[ошибка стрима: " + (err?.message || String(err)) + "]"));
+        controller.close();
+      }
     },
   });
-
-  // Plain-text stream — клиент читает чанки и аппендит в message.text
-  return result.toTextStreamResponse();
+  return new Response(stream, {
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      "cache-control": "no-store",
+      "x-accel-buffering": "no",
+    },
+  });
 }
