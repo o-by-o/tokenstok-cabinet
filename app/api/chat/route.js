@@ -77,6 +77,7 @@ export async function POST(req) {
     });
   }
 
+  let capturedError = null;
   let result;
   try {
     result = streamText({
@@ -84,29 +85,40 @@ export async function POST(req) {
       messages: modelMessages,
       maxOutputTokens: 1024,
       onError({ error }) {
+        capturedError = error;
         console.error("[tokenstok /api/chat] streamText onError:", error);
       },
     });
   } catch (err) {
     console.error("[tokenstok /api/chat] streamText threw:", err);
-    return new Response(JSON.stringify({ error: "AI Gateway не отвечает: " + (err?.message || String(err)) }), {
+    return new Response(JSON.stringify({ error: friendlyError(err) }), {
       status: 502, headers: { "content-type": "application/json" },
     });
   }
 
-  // Stream вручную: оборачиваем textStream в ReadableStream и отдаём как text/plain.
-  // (toTextStreamResponse в некоторых сценариях AI SDK v6 + gateway падал на n.some.)
+  // Stream via fullStream so we can react to error events explicitly.
+  // textStream silently closes on errors (AI SDK quirk).
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
+      let emittedAny = false;
       try {
-        for await (const chunk of result.textStream) {
-          controller.enqueue(encoder.encode(chunk));
+        for await (const part of result.fullStream) {
+          if (part.type === "text-delta" && part.text) {
+            controller.enqueue(encoder.encode(part.text));
+            emittedAny = true;
+          } else if (part.type === "error") {
+            console.error("[tokenstok /api/chat] fullStream error part:", part.error);
+            capturedError = part.error;
+          }
+        }
+        if (!emittedAny && capturedError) {
+          controller.enqueue(encoder.encode(friendlyError(capturedError)));
         }
         controller.close();
       } catch (err) {
-        console.error("[tokenstok /api/chat] textStream iteration failed:", err);
-        controller.enqueue(encoder.encode("\n\n[ошибка стрима: " + (err?.message || String(err)) + "]"));
+        console.error("[tokenstok /api/chat] fullStream iteration failed:", err);
+        controller.enqueue(encoder.encode(friendlyError(err)));
         controller.close();
       }
     },
@@ -118,4 +130,18 @@ export async function POST(req) {
       "x-accel-buffering": "no",
     },
   });
+}
+
+function friendlyError(err) {
+  const raw = err?.message || String(err);
+  if (/insufficient.?funds|insufficient.?credit|payment.required|402/i.test(raw)) {
+    return "Сервис временно недоступен (нет кредитов на AI-провайдере). Мы уже знаем, скоро вернём.";
+  }
+  if (/unauthorized|401|invalid.api.key/i.test(raw)) {
+    return "AI-сервис не авторизован. Свяжись с поддержкой.";
+  }
+  if (/rate.?limit|429/i.test(raw)) {
+    return "Слишком много запросов, подожди немного и попробуй снова.";
+  }
+  return "Ошибка AI-сервиса: " + raw;
 }
