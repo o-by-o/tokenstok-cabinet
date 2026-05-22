@@ -10,6 +10,8 @@ const PUBLIC = [
   "/auth",   // /auth/magic, /auth/verify, /auth/reset, /auth/check-inbox
   "/api/auth",
   "/api/payments/paymaster/webhook",  // PayMaster шлёт без сессии
+  "/api/health",                       // мониторинг / uptime-роботы
+  "/api/admin",                        // защищён ADMIN_SECRET Bearer
 ];
 
 export default auth((req) => {
