@@ -4,12 +4,10 @@
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
+import { getUsdToRub } from "./fx";
 
 // 30 % наценки сверх цены провайдера.
 export const MARKUP = new Prisma.Decimal("1.300");
-
-// Курс USD→RUB. На MVP — хардкод; TODO: автообновление из ЦБ РФ.
-export const USD_TO_RUB = new Prisma.Decimal("95.0");
 
 // Цены провайдеров — USD per 1M tokens (input / output).
 // Цены актуальны на момент сборки MVP; пересмотр — раз в квартал.
@@ -37,15 +35,16 @@ const PRICE_TABLE = {
  * @param {string} p.modelId
  * @param {number} p.inputTokens
  * @param {number} p.outputTokens
- * @returns {{ costRub: Prisma.Decimal, rawCostUsd: Prisma.Decimal, markup: Prisma.Decimal }}
+ * @returns {Promise<{ costRub: Prisma.Decimal, rawCostUsd: Prisma.Decimal, markup: Prisma.Decimal, usdToRub: Prisma.Decimal }>}
  */
-export function calculateCostRub({ modelId, inputTokens, outputTokens }) {
+export async function calculateCostRub({ modelId, inputTokens, outputTokens }) {
   const price = PRICE_TABLE[modelId] || PRICE_FALLBACK;
   const inUsd  = new Prisma.Decimal(inputTokens  || 0).mul(price.input).div(1_000_000);
   const outUsd = new Prisma.Decimal(outputTokens || 0).mul(price.output).div(1_000_000);
   const rawCostUsd = inUsd.plus(outUsd);
-  const costRub    = rawCostUsd.mul(USD_TO_RUB).mul(MARKUP);
-  return { costRub, rawCostUsd, markup: MARKUP };
+  const usdToRub   = await getUsdToRub();
+  const costRub    = rawCostUsd.mul(usdToRub).mul(MARKUP);
+  return { costRub, rawCostUsd, markup: MARKUP, usdToRub };
 }
 
 /**
@@ -72,7 +71,7 @@ export async function checkBalance(userId, minRub = "0.50") {
  * @returns {Promise<{ transactionId: string, balanceAfter: Prisma.Decimal, costRub: Prisma.Decimal }>}
  */
 export async function chargeUsage(p) {
-  const { costRub, rawCostUsd, markup } = calculateCostRub(p);
+  const { costRub, rawCostUsd, markup } = await calculateCostRub(p);
 
   // Минимальное списание — копейка, чтобы не плодить нулевые операции.
   if (costRub.lessThan("0.0001")) {
