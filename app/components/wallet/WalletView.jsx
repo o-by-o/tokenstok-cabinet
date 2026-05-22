@@ -1,13 +1,14 @@
 "use client";
 
-// WalletView.jsx — balance hero + topup row + today chart + by-model breakdown.
-// Mobile-first, scales to desktop with a max-width.
+// WalletView.jsx — реальные данные (балансы / расход / транзакции) +
+// пополнение через PayMaster (POST /api/payments/paymaster/create →
+// redirect на paymentUrl).
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useBreakpoint } from "../../lib/hooks";
-import { useApp, useDispatch } from "../../lib/store";
+import { useDispatch } from "../../lib/store";
 import { TSIcon } from "../../cabinet/foundation";
-import { fmtRub } from "../../lib/utils";
 
 const STYLE = `
   .wv{ flex:1; min-height:0; display:flex; flex-direction:column; background:var(--bg); height:100dvh; }
@@ -36,13 +37,34 @@ const STYLE = `
   .balance-sub{ font-family:var(--mono); font-size:11px; color:var(--mute); margin-top:6px; }
   .balance-sub b{ color:var(--ink2); font-weight:600; }
 
-  .topup-row{ display:flex; gap:6px; }
-  .topup-btn{
-    flex:1; padding:12px 6px; border-radius:12px;
-    font:600 12.5px var(--sans); cursor:pointer;
+  .topup-card{
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:14px 16px;
   }
-  .topup-btn.primary{ background:var(--ink); color:var(--bubble-out-fg); border:0; }
-  .topup-btn.secondary{ background:var(--card); color:var(--ink); border:1px solid var(--line); }
+  .topup-card .l{ font-family:var(--mono); font-size:11px; color:var(--mute); letter-spacing:.04em; margin-bottom:10px; }
+  .topup-row{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+  .topup-btn{
+    flex:1; min-width:80px; padding:10px 6px; border-radius:10px;
+    font:600 12.5px var(--sans); cursor:pointer;
+    background:var(--chip); color:var(--ink); border:1px solid var(--line2);
+  }
+  .topup-btn.active, .topup-btn:hover{ background:var(--ink); color:var(--bubble-out-fg); border-color:var(--ink); }
+  .topup-input{
+    display:flex; gap:6px;
+  }
+  .topup-input input{
+    flex:1; padding:10px 12px; border-radius:10px; border:1px solid var(--line);
+    font-family:var(--sans); font-size:14px; background:var(--bg); color:var(--ink); outline:none;
+  }
+  .topup-input button{
+    padding:10px 16px; border-radius:10px; border:0; background:var(--ink); color:var(--bubble-out-fg);
+    font:600 13px var(--sans); cursor:pointer;
+  }
+  .topup-input button:disabled{ opacity:.55; cursor:wait; }
+  .topup-err{
+    background:rgba(194, 90, 53, 0.08); border:1px solid #c25a35; border-radius:10px;
+    padding:8px 12px; color:#c25a35; font-size:12px; line-height:1.4; margin-top:8px;
+  }
 
   .card{
     background:var(--card); border:1px solid var(--line); border-radius:14px;
@@ -51,10 +73,6 @@ const STYLE = `
   .card-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px; }
   .card-head .l{ font-family:var(--mono); font-size:11px; color:var(--mute); letter-spacing:.04em; }
   .card-head .r{ font-family:var(--sans); font-weight:700; font-size:18px; letter-spacing:-0.015em; }
-  .chart{ display:flex; align-items:flex-end; gap:4px; height:60px; }
-  .chart .bar{ flex:1; border-radius:2px; background:var(--line2); }
-  .chart .bar.peak{ background:var(--ink); }
-  .chart-axis{ display:flex; justify-content:space-between; margin-top:6px; font-family:var(--mono); font-size:9.5px; color:var(--mute); }
 
   .br-title{ font-family:var(--mono); font-size:10.5px; color:var(--mute); letter-spacing:.06em; text-transform:uppercase; margin-bottom:6px; }
   .br-list{ background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:hidden; }
@@ -66,35 +84,129 @@ const STYLE = `
     display:grid; place-items:center; font-family:var(--mono); font-weight:700; font-size:10.5px;
     flex-shrink:0;
   }
-  .br-row .nm{ flex:1; font-size:13.5px; font-weight:500; }
+  .br-row .nm{ flex:1; font-size:13.5px; font-weight:500; font-family:var(--mono); }
   .br-row .n{ font-family:var(--mono); font-size:11px; color:var(--mute); }
   .br-row .c{ font-family:var(--mono); font-size:13px; font-weight:600; }
+
+  .tx-row{ display:flex; align-items:center; gap:10px; padding:10px 14px; }
+  .tx-row + .tx-row{ border-top:1px solid var(--line); }
+  .tx-row .tx-kind{
+    width:30px; height:30px; border-radius:8px; display:grid; place-items:center;
+    background:var(--chip); border:1px solid var(--line2); flex-shrink:0;
+    font-family:var(--mono); font-weight:700; font-size:14px;
+  }
+  .tx-row .tx-kind.topup{ background:rgba(20,110,64,0.08); border-color:#146e40; color:#146e40; }
+  .tx-row .tx-kind.spend{ background:rgba(194,90,53,0.08); border-color:#c25a35; color:#c25a35; }
+  .tx-row .tx-desc{ flex:1; min-width:0; }
+  .tx-row .tx-desc .t{ font-size:13px; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tx-row .tx-desc .s{ font-family:var(--mono); font-size:10.5px; color:var(--mute); margin-top:1px; }
+  .tx-row .tx-amount{ font-family:var(--mono); font-size:13.5px; font-weight:700; flex-shrink:0; }
+  .tx-row .tx-amount.plus{ color:#146e40; }
+  .tx-row .tx-amount.minus{ color:#c25a35; }
+
+  .skeleton{ background:var(--chip); border-radius:8px; }
 `;
 
-const HOURS = [8,14,22,16,11,9,17,28,32,21,12,7];
-const PEAK = 9;
+const QUICK_AMOUNTS = [500, 1000, 3000, 5000];
+
+function fmtRub(value) {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return "0,00";
+  return n.toFixed(2).replace(".", ",");
+}
+
+function fmtDate(iso) {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  } catch { return iso; }
+}
+
+function txGlyph(kind) {
+  if (kind === "topup")  return "+";
+  if (kind === "spend")  return "−";
+  if (kind === "refund") return "↺";
+  if (kind === "bonus")  return "★";
+  return "·";
+}
+
+function txDescriptionLabel(t) {
+  if (t.description) return t.description;
+  if (t.kind === "topup")  return "Пополнение баланса";
+  if (t.kind === "spend")  return "Запрос к модели";
+  if (t.kind === "refund") return "Возврат";
+  if (t.kind === "bonus")  return "Бонус";
+  return t.kind;
+}
 
 export function WalletView() {
   const bp = useBreakpoint();
   const dispatch = useDispatch();
-  const { state } = useApp();
 
-  const topup = (amount) => dispatch({ type: "wallet/topup", amount });
+  const [data,    setData]    = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [amount,  setAmount]  = useState(500);
+  const [custom,  setCustom]  = useState("");
+  const [topupLoading, setTopupLoading] = useState(false);
+  const [topupError,   setTopupError]   = useState(null);
 
-  // wallet.byModel is an array of {id, glyph, n, c}.
-  // Tolerate the older {id: cost} object shape from before the schema change,
-  // so persisted localStorage from earlier sessions doesn't crash the page.
-  const rawByModel = state.wallet?.byModel;
-  const breakdown = Array.isArray(rawByModel)
-    ? rawByModel
-    : rawByModel && typeof rawByModel === "object"
-      ? Object.entries(rawByModel).map(([id, c]) => ({
-          id,
-          glyph: id.slice(0, 2).toUpperCase(),
-          n: Math.max(1, Math.round(Number(c) * 10)),
-          c: Number(c) || 0,
-        }))
-      : [];
+  // Загружаем сводку при монтаже.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/wallet");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const body = await res.json();
+        if (cancelled) return;
+        setData(body);
+        if (body.balance != null) dispatch({ type: "wallet/balance", value: body.balance });
+      } catch (err) {
+        console.error("[wallet] load failed", err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [dispatch]);
+
+  const startTopup = async () => {
+    const amt = Number(custom) > 0 ? Number(custom) : amount;
+    if (!Number.isFinite(amt) || amt < 100 || amt > 100_000) {
+      setTopupError("Сумма должна быть от 100 до 100 000 ₽.");
+      return;
+    }
+    setTopupError(null);
+    setTopupLoading(true);
+    try {
+      const res = await fetch("/api/payments/paymaster/create", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ amountRub: amt }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !body.paymentUrl) {
+        setTopupError(body.error || `Не получилось создать платёж (HTTP ${res.status}).`);
+        setTopupLoading(false);
+        return;
+      }
+      window.location.href = body.paymentUrl;
+    } catch (err) {
+      console.error("[wallet] topup failed", err);
+      setTopupError("Сеть отвалилась. Попробуйте ещё раз.");
+      setTopupLoading(false);
+    }
+  };
+
+  const balance       = Number(data?.balance ?? 0);
+  const todaySpend    = Number(data?.todaySpendRub ?? 0);
+  const byModel       = data?.byModel       ?? [];
+  const transactions  = data?.transactions  ?? [];
+
+  // «Хватит на сколько дней» — грубая оценка на основе сегодняшнего расхода
+  const daysLeft = todaySpend > 0.01
+    ? Math.floor(balance / Math.max(todaySpend, 0.5))
+    : null;
 
   return (
     <>
@@ -113,51 +225,105 @@ export function WalletView() {
             <div>
               <div className="balance-eyebrow">остаток на счёте</div>
               <div className="balance-amount">
-                <span className="num">{state.wallet.balance.toFixed(2).replace(".", ",")}</span>
-                <span className="cur">₽</span>
+                {loading ? (
+                  <span className="skeleton" style={{ width: 180, height: 56 }}/>
+                ) : (
+                  <>
+                    <span className="num">{fmtRub(balance)}</span>
+                    <span className="cur">₽</span>
+                  </>
+                )}
               </div>
-              <div className="balance-sub">
-                хватит на <b>~ {Math.floor(state.wallet.balance / Math.max(state.wallet.todaySpend, 0.5))} дней</b> при текущем расходе
-              </div>
+              {!loading && (
+                <div className="balance-sub">
+                  {daysLeft != null
+                    ? <>хватит на <b>~ {daysLeft} дней</b> при текущем расходе</>
+                    : <>сегодня вы ещё не тратили — самое время попробовать модель</>}
+                </div>
+              )}
             </div>
 
-            <div className="topup-row">
-              <button className="topup-btn primary" onClick={() => topup(1000)}>+ 1 000 ₽</button>
-              <button className="topup-btn secondary" onClick={() => topup(5000)}>+ 5 000 ₽</button>
-              <button className="topup-btn secondary" onClick={() => topup(10000)}>+ 10 000 ₽</button>
-              <button className="topup-btn secondary" onClick={() => {
-                const v = prompt("Сумма пополнения, ₽:", "500");
-                const n = Number(v);
-                if (Number.isFinite(n) && n > 0) topup(n);
-              }}>своя</button>
+            {/* Пополнение */}
+            <div className="topup-card">
+              <div className="l">пополнить</div>
+              <div className="topup-row">
+                {QUICK_AMOUNTS.map((a) => (
+                  <button
+                    key={a}
+                    className={`topup-btn ${amount === a && !custom ? "active" : ""}`}
+                    onClick={() => { setAmount(a); setCustom(""); }}
+                  >
+                    {a} ₽
+                  </button>
+                ))}
+              </div>
+              <div className="topup-input">
+                <input
+                  type="number" min={100} max={100000}
+                  placeholder="другая сумма, ₽"
+                  value={custom}
+                  onChange={(e) => setCustom(e.target.value)}
+                />
+                <button onClick={startTopup} disabled={topupLoading}>
+                  {topupLoading ? "..." : "Оплатить →"}
+                </button>
+              </div>
+              {topupError && <div className="topup-err">{topupError}</div>}
             </div>
 
+            {/* Сегодня */}
             <div className="card">
               <div className="card-head">
                 <span className="l">сегодня</span>
-                <span className="r"><span className="num">{state.wallet.todaySpend.toFixed(2).replace(".", ",")}</span> ₽</span>
+                <span className="r"><span className="num">{fmtRub(todaySpend)}</span> ₽</span>
               </div>
-              <div className="chart">
-                {HOURS.map((h, i) => (
-                  <span key={i} className={`bar ${i === PEAK ? "peak" : ""}`} style={{ height: `${h * 1.7}px` }}/>
-                ))}
-              </div>
-              <div className="chart-axis">
-                <span>00</span><span>06</span><span>12</span><span>18</span><span>24</span>
+              <div style={{ fontFamily:"var(--mono)", fontSize: 11, color: "var(--mute)" }}>
+                {todaySpend > 0 ? "расход за сутки" : "пока ни одного запроса"}
               </div>
             </div>
 
+            {/* По моделям */}
+            {byModel.length > 0 && (
+              <div>
+                <div className="br-title">по моделям · 30 дней</div>
+                <div className="br-list">
+                  {byModel.map((b) => (
+                    <div key={b.id} className="br-row">
+                      <span className="gly">{b.glyph}</span>
+                      <span className="nm">{b.id}</span>
+                      <span className="n">{b.n} зап.</span>
+                      <span className="c"><span className="num">{fmtRub(b.c)}</span> ₽</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* История операций */}
             <div>
-              <div className="br-title">по моделям · сегодня</div>
+              <div className="br-title">история операций</div>
               <div className="br-list">
-                {breakdown.map((b) => (
-                  <div key={b.id} className="br-row">
-                    <span className="gly">{b.glyph}</span>
-                    <span className="nm" style={{ fontFamily: "var(--mono)", fontWeight: 600 }}>{b.id}</span>
-                    <span className="n">{b.n} зап.</span>
-                    <span className="c"><span className="num">{b.c.toFixed(2).replace(".", ",")}</span> ₽</span>
+                {transactions.length === 0 && !loading && (
+                  <div className="br-row" style={{ color: "var(--mute)", fontSize: 13 }}>
+                    Транзакций ещё нет.
                   </div>
-                ))}
+                )}
+                {transactions.map((t) => {
+                  const amt = Number(t.amountRub);
+                  const isPlus = amt > 0;
+                  return (
+                    <div key={t.id} className="tx-row">
+                      <span className={`tx-kind ${t.kind}`}>{txGlyph(t.kind)}</span>
+                      <div className="tx-desc">
+                        <div className="t">{txDescriptionLabel(t)}</div>
+                        <div className="s">{fmtDate(t.createdAt)} · {t.status}</div>
+                      </div>
+                      <span className={`tx-amount ${isPlus ? "plus" : "minus"}`}>
+                        {isPlus ? "+" : ""}{fmtRub(amt)} ₽
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
