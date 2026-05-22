@@ -37,6 +37,30 @@ const STYLE = `
   }
   .au-form .alt a{ color:#0c0c0c; font-weight:600; text-decoration:none; }
   .au-form .alt a:hover{ text-decoration:underline; text-underline-offset:4px; }
+  .au-form .sep{
+    display:flex; align-items:center; gap:10px; color:#9b9b9b; font-size:12px;
+    text-transform:uppercase; letter-spacing:0.1em; padding:4px 0;
+  }
+  .au-form .sep::before, .au-form .sep::after{
+    content:""; flex:1; height:1px; background:#e6e3da;
+  }
+  .au-form .ghost{
+    appearance:none; cursor:pointer;
+    background:transparent; color:#0c0c0c;
+    border:1px solid #d8d3c4; padding:12px 18px; border-radius:12px;
+    font-family:var(--font-manrope), sans-serif; font-weight:500; font-size:14px;
+  }
+  .au-form .ghost:hover{ background:#f0ede4; }
+  .au-form .ghost:disabled{ opacity:.55; cursor:wait; }
+  .au-form .ok{
+    background:rgba(20, 110, 64, 0.08); border:1px solid #146e40; border-radius:10px;
+    padding:10px 12px; color:#146e40; font-size:13px; line-height:1.4;
+  }
+  .au-form .miniLink{
+    background:none; border:0; color:#6c6c6c; font-size:12px; cursor:pointer; padding:0;
+    text-align:right; text-decoration:underline; text-underline-offset:3px;
+  }
+  .au-form .miniLink:hover{ color:#0c0c0c; }
 `;
 
 export function LoginForm() {
@@ -47,6 +71,11 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  // Magic-link state — отдельная мини-форма
+  const [magicEmail, setMagicEmail] = useState("");
+  const [magicSending, setMagicSending] = useState(false);
+  const [magicSentMsg, setMagicSentMsg] = useState(null);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -60,6 +89,43 @@ export function LoginForm() {
     }
     router.push(callbackUrl);
     router.refresh();
+  };
+
+  const requestMagic = async (e) => {
+    e.preventDefault();
+    const value = (magicEmail || email).trim().toLowerCase();
+    if (!value) return;
+    setMagicSending(true);
+    setMagicSentMsg(null);
+    const res = await fetch("/api/auth/magic/request", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: value }),
+    });
+    setMagicSending(false);
+    if (res.ok) {
+      // Не показываем существование email — просто переходим на check-inbox
+      router.push(`/auth/check-inbox?reason=magic&email=${encodeURIComponent(value)}`);
+    } else {
+      const body = await res.json().catch(() => ({}));
+      setMagicSentMsg(body.error || "Не получилось отправить ссылку. Попробуйте ещё раз.");
+    }
+  };
+
+  const requestReset = async () => {
+    const value = (email || magicEmail).trim().toLowerCase();
+    if (!value) { setError("Сначала укажите email."); return; }
+    const res = await fetch("/api/auth/password/reset/request", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: value }),
+    });
+    if (res.ok) {
+      router.push(`/auth/check-inbox?reason=reset&email=${encodeURIComponent(value)}`);
+    } else {
+      const body = await res.json().catch(() => ({}));
+      setError(body.error || "Не получилось отправить письмо. Попробуйте позже.");
+    }
   };
 
   return (
@@ -84,8 +150,27 @@ export function LoginForm() {
             placeholder="минимум 8 символов"
           />
         </label>
+        <button type="button" className="miniLink" onClick={requestReset}>Забыли пароль?</button>
         <button className="btn" type="submit" disabled={loading}>
           {loading ? "..." : "Войти →"}
+        </button>
+      </form>
+
+      <div className="au-form sep">или</div>
+
+      <form className="au-form" onSubmit={requestMagic}>
+        <h2 style={{ fontSize:18 }}>Получить ссылку для входа</h2>
+        {magicSentMsg && <div className="err">{magicSentMsg}</div>}
+        <label>
+          <span>Email</span>
+          <input
+            type="email" required autoComplete="email"
+            value={magicEmail} onChange={(e) => setMagicEmail(e.target.value)}
+            placeholder="ты@пример.рф"
+          />
+        </label>
+        <button className="ghost" type="submit" disabled={magicSending}>
+          {magicSending ? "..." : "Отправить ссылку на email"}
         </button>
         <div className="alt">
           Нет аккаунта? <Link href="/register">Завести</Link>

@@ -1,8 +1,11 @@
-// POST /api/auth/register — creates a user with bcrypt-hashed password.
+// POST /api/auth/register — creates a user with bcrypt-hashed password
+// and asynchronously sends a verification email.
 // Returns 200 on success, 4xx with { error } on validation failure.
 
 import bcrypt from "bcryptjs";
 import { prisma } from "../../../lib/prisma";
+import { sendVerifyEmail } from "../../../lib/mail";
+import { newToken, expiresAt } from "../../../lib/tokens";
 
 export async function POST(req) {
   let body;
@@ -26,6 +29,17 @@ export async function POST(req) {
   const user = await prisma.user.create({
     data: { email, hashedPassword, name },
     select: { id: true, email: true, name: true, balance: true },
+  });
+
+  // Verify-токен — TTL 24 часа. Не блокируем регистрацию если SMTP упал.
+  const token = newToken();
+  await prisma.emailVerificationToken.create({
+    data: { token, userId: user.id, expiresAt: expiresAt(24 * 60) },
+  });
+  const base = process.env.AUTH_URL || "https://chat.tokenstok.ru";
+  const link = `${base}/auth/verify?token=${encodeURIComponent(token)}`;
+  sendVerifyEmail(email, link).catch((e) => {
+    console.error(`[auth/register] sendVerifyEmail failed: ${e?.message || e}`);
   });
 
   return json({ ok: true, user: { ...user, balance: user.balance.toString() } });

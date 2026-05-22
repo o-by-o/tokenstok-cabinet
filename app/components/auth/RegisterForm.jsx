@@ -69,7 +69,8 @@ export function RegisterForm() {
       setError("Зарегистрировались, но не получилось войти. Попробуй на странице входа.");
       return;
     }
-    router.push("/chat");
+    // Подтверждение email можно сделать позже — пока пускаем сразу в кабинет.
+    router.push(`/auth/check-inbox?reason=verify&email=${encodeURIComponent(email)}`);
     router.refresh();
   };
 

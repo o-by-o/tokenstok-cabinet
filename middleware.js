@@ -4,7 +4,13 @@
 import { NextResponse } from "next/server";
 import { auth } from "./app/lib/auth";
 
-const PUBLIC = ["/login", "/register", "/api/auth"];
+const PUBLIC = [
+  "/login",
+  "/register",
+  "/auth",   // /auth/magic, /auth/verify, /auth/reset, /auth/check-inbox
+  "/api/auth",
+  "/api/payments/paymaster/webhook",  // PayMaster шлёт без сессии
+];
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
