@@ -1,5 +1,4 @@
-# Same multi-stage Next.js standalone Dockerfile as the landing.
-# Used by tokenstok-cabinet (the chat app at lk.tokenstok.ru).
+# Multi-stage Next.js standalone Dockerfile for tokenstok-cabinet (chat.tokenstok.ru).
 
 FROM node:22-alpine AS deps
 RUN apk add --no-cache libc6-compat openssl
@@ -35,6 +34,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
+# Migrations run from the host (`cd tokenstok-cabinet && npm install && npx prisma migrate deploy`)
+# or from the deps stage (`docker compose run --rm --entrypoint sh tokenstok-cabinet`).
+# We do NOT ship prisma CLI into the runner — it needs many extra wasm files.
 USER nextjs
 EXPOSE 3000
 CMD ["node", "server.js"]
