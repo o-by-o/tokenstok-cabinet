@@ -230,7 +230,13 @@ function reducer(state, action) {
     case "msg/streamFail": {
       const c = state.chats.byId[state.chats.currentId];
       if (!c) return state;
-      const messages = c.messages.map((m) => (m.id === action.id ? { ...m, text: action.text || "Ошибка генерации. Попробуй ещё раз.", streaming: false, error: true } : m));
+      const messages = c.messages.map((m) => (m.id === action.id ? {
+        ...m,
+        text: action.text || "Ошибка генерации. Попробуй ещё раз.",
+        streaming: false,
+        error: true,
+        cta: action.cta || null,        // "topup" → MessageBubble отрендерит кнопку «Пополнить»
+      } : m));
       return { ...state, chats: { ...state.chats, byId: { ...state.chats.byId, [c.id]: { ...c, messages } } } };
     }
     case "msg/regenerate": {
@@ -252,6 +258,12 @@ function reducer(state, action) {
     // wallet ───────────────────────────────────────────
     case "wallet/topup": {
       return { ...state, wallet: { ...state.wallet, balance: state.wallet.balance + action.amount } };
+    }
+    case "wallet/balance": {
+      // Свежий баланс из /api/me/balance (строка с decimal — пускаем как Number).
+      const next = Number(action.value);
+      if (!Number.isFinite(next)) return state;
+      return { ...state, wallet: { ...state.wallet, balance: next } };
     }
 
     // ui ───────────────────────────────────────────────

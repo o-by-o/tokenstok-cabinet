@@ -64,6 +64,14 @@ export function ChatView() {
           signal: controller.signal,
         });
         if (!res.ok) {
+          if (res.status === 402) {
+            // Нет денег на балансе — показываем CTA на пополнение.
+            const body = await res.json().catch(() => ({}));
+            const msg = body?.message ||
+              "На балансе закончились средства. Пополните кошелёк, чтобы продолжить.";
+            dispatch({ type: "msg/streamFail", id: last.id, text: msg, cta: "topup" });
+            return;
+          }
           let msg = `Ошибка ${res.status}`;
           try { const e = await res.json(); if (e?.error) msg = e.error; } catch {}
           dispatch({ type: "msg/streamFail", id: last.id, text: msg });
@@ -79,6 +87,11 @@ export function ChatView() {
           if (chunk) dispatch({ type: "msg/streamChunk", id: last.id, chunk });
         }
         dispatch({ type: "msg/finishStreaming", id: last.id });
+        // После закрытия стрима — подтянуть актуальный баланс.
+        try {
+          const b = await fetch("/api/me/balance").then((r) => r.json());
+          if (b?.balance != null) dispatch({ type: "wallet/balance", value: String(b.balance) });
+        } catch { /* ignore */ }
       } catch (err) {
         if (err.name === "AbortError") return;
         console.error("[chat] stream failed", err);
